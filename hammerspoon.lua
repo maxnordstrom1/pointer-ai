@@ -159,53 +159,112 @@ local function htmlEscape(s)
   return (s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 end
 
--- Answer panel: the whole thread, newest at the bottom, plus a follow-up line when onAsk is given.
+-- Text for JavaScript: a JSON string literal
+local function js(s) return hs.json.encode({ s }) .. "[0]" end
+
+-- Conversation panel: the thread so far, plus a follow-up line when onAsk is given. Returns a function
+-- that runs JavaScript in it (queued until the page has loaded) to add a question, type text, finish.
 -- Select with the mouse (hold ⌥ first) or ⌘C to copy, everything if nothing is selected. Esc closes.
-local function showAnswer(thread, onAsk, closed)
-  local parts, raw = {}, {}
+local function showThread(thread, onAsk, closed)
+  local parts = {}
   for _, t in ipairs(thread) do
-    if t.q then parts[#parts + 1] = '<p class="q">' .. htmlEscape(t.q) .. "</p>"; raw[#raw + 1] = t.q end
-    parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"; raw[#raw + 1] = t.a
+    if t.q then parts[#parts + 1] = '<p class="q">' .. htmlEscape(t.q) .. "</p>" end
+    parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"
   end
-  local sent = false
+  local loaded, queued = false, {}
   openPanel([[<style>
 .box { display: flex; flex-direction: column }
 #b { flex: 1; overflow: auto; padding: 0 14px; white-space: pre-wrap; cursor: text }
 p { margin: 10px 0 } .q { color: var(--dim) }
 .ask { flex: none; height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 14px;
        box-shadow: inset 0 .5px 0 var(--edge) }
-i { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); animation: breathe 2.4s ease-in-out infinite }
+i { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--dim);
+    animation: breathe 2.4s ease-in-out infinite }
 input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
+input:disabled { opacity: .4 }
 .katex { font-size: 1.1em }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="math()"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="mathAll()"></script>
 <div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
     (onAsk and [[<div class="ask"><i></i><input id="q" placeholder="Follow up…"></div>]] or "") .. [[</div><script>
 const fit = () => { post({ h: b.scrollHeight + (window.q ? 34 : 0) }); b.scrollTop = b.scrollHeight }  // grow to fit (max 360px), newest in view
-fit()
 // Render $…$ math with KaTeX. Offline, the script fails to load and the raw text stays.
-function math() {
-  renderMathInElement(b, { throwOnError: false, delimiters: [
-    { left: "$$", right: "$$", display: true }, { left: "\\[", right: "\\]", display: true },
-    { left: "$", right: "$", display: false }, { left: "\\(", right: "\\)", display: false } ] })
+const OPTS = { throwOnError: false, delimiters: [
+  { left: "$$", right: "$$", display: true }, { left: "\\[", right: "\\]", display: true },
+  { left: "$", right: "$", display: false }, { left: "\\(", right: "\\)", display: false } ] }
+const math = el => { if (window.renderMathInElement) renderMathInElement(el, OPTS) }
+function mathAll() { b.querySelectorAll("p").forEach(p => p !== cur && math(p)); fit() }
+
+// Typewriter: text from the model queues up and is typed out, faster when the model gets ahead
+let cur = null, queue = "", ending = false
+function addQ(text) {
+  const p = document.createElement("p"); p.className = "q"; p.textContent = text; b.append(p)
+  cur = document.createElement("p"); cur.innerHTML = "<i></i>"; b.append(cur)  // breathing dot until text arrives
+  queue = ""; ending = false
+  if (window.q) q.disabled = true
   fit()
 }
-if (window.q) { q.focus(); q.addEventListener("keydown", e => { if (e.key === "Enter" && q.value.trim()) post({ q: q.value }) }) }
+function addText(s) { queue += s }
+function finish() { ending = true }
+setInterval(() => {
+  if (!cur) return
+  if (queue) {
+    if (cur.querySelector("i")) { queue = queue.trimStart(); if (!queue) return; cur.textContent = "" }
+    const n = Math.max(1, Math.ceil(queue.length / 30))
+    cur.textContent += queue.slice(0, n); queue = queue.slice(n); fit()
+  } else if (ending) {
+    cur.textContent = cur.textContent.trim() || "(no answer)"
+    math(cur); cur = null
+    if (window.q) { q.disabled = false; q.focus() }
+    fit()
+  }
+}, 16)
+
+if (window.q) { q.focus(); q.addEventListener("keydown", e => {
+  if (e.key === "Enter" && q.value.trim() && !q.disabled) { post({ q: q.value }); q.value = "" } }) }
 addEventListener("keydown", e => {
   if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) })
   if (e.metaKey && e.key === "a" && document.activeElement !== window.q) { e.preventDefault(); getSelection().selectAllChildren(b) }
 })
+fit()
+post({ ready: true })
 </script>]], 340, 40,
     function(m)
-      if m.copy then hs.pasteboard.setContents(m.copy ~= "" and m.copy or table.concat(raw, "\n\n"))  -- unrendered math
-      elseif m.q and not sent then
-        sent = true
-        hs.timer.doAfter(0, function() closePanel(); onAsk(m.q) end)  -- not from inside the panel's own callback
-      end
+      if m.ready then
+        loaded = true
+        for _, code in ipairs(queued) do panel:evaluateJavaScript(code) end
+        queued = {}
+      elseif m.copy then
+        if m.copy == "" then  -- nothing selected: the plain-text thread, with unrendered math
+          local raw = {}
+          for _, t in ipairs(thread) do if t.q then raw[#raw + 1] = t.q end; raw[#raw + 1] = t.a end
+          m.copy = table.concat(raw, "\n\n")
+        end
+        hs.pasteboard.setContents(m.copy)
+      elseif m.q and onAsk then onAsk(m.q) end
     end,
-    function() if not sent and closed then closed() end end)
+    closed)
+  local mine = panel
+  return function(code)
+    if mine ~= panel then return end  -- closed or replaced
+    if loaded then panel:evaluateJavaScript(code) else queued[#queued + 1] = code end
+  end
+end
+
+-- Splits off a trailing incomplete UTF-8 character (a pipe read can end mid-character)
+local function utf8Split(s)
+  for k = #s, math.max(1, #s - 3), -1 do
+    local c = s:byte(k)
+    if c < 0x80 then break end
+    if c >= 0xC0 then
+      local len = c >= 0xF0 and 4 or c >= 0xE0 and 3 or 2
+      if #s - k + 1 < len then return s:sub(1, k - 1), s:sub(k) end
+      break
+    end
+  end
+  return s, ""
 end
 
 -- Question box by the cursor. Calls done(question), or done(nil) on Esc.
@@ -230,37 +289,61 @@ q.addEventListener("keydown", e => { if (e.key === "Enter") post({ q: q.value })
     function() if not sent then done(nil) end end)
 end
 
--- One conversation per hotkey press: same screenshot, follow-ups until Esc
+-- One conversation per hotkey press: same screenshot, follow-ups until Esc. ask.py streams each answer
+-- in pieces and ends it with \30 (END).
 local function aiMouse(explain)
   closePanel()
-  local out, err, ready, stop, task = "", "", false, nil, nil
-  local thread, pending = {}, explain and "Explain what I'm pointing at." or nil
+  local out, err, ready, stop, task, view = "", "", false, nil, nil, nil
+  local thread, cur = {}, explain and { q = "Explain what I'm pointing at.", a = "" } or nil
   local function hide() if stop then stop(); stop = nil end end
-  local function think() if not stop then stop = spinner() end end
-  local function ask(q) pending = q; task:setInput(q .. "\n"); think() end
+  local function ended() if task:isRunning() then task:terminate() end end
+  local function ask(q)
+    cur = { q = q, a = "" }
+    task:setInput(q .. "\n")
+    if view then view("addQ(" .. js(q) .. ")") elseif not stop then stop = spinner() end  -- orb until the panel exists
+  end
+  local function got(text, finished)
+    if not view then
+      hide()
+      view = showThread(thread, ask, ended)
+      view("addQ(" .. js(cur.q) .. ")")
+    end
+    if text ~= "" then cur.a = cur.a .. text; view("addText(" .. js(text) .. ")") end
+    if finished then
+      thread[#thread + 1] = { q = cur.q, a = cur.a:match("^%s*(.-)%s*$") }
+      cur = nil
+      view("finish()")
+    end
+  end
   local p, f = hs.mouse.absolutePosition(), hs.mouse.getCurrentScreen():fullFrame()
   local args = { SCRIPT, "--at", ("%.0f,%.0f"):format(p.x, p.y), "--screen", ("%.0f,%.0f,%.0f,%.0f"):format(f.x, f.y, f.w, f.h) }
   if explain then args[#args + 1] = "--explain" end
   task = hs.task.new(PYTHON, function(code)
       hide()
-      local msg = out:match("^%s*(.-)%s*$")  -- leftovers, e.g. the no-permission message
+      local msg = not ready and out:match("^%s*(.-)%s*$") or ""  -- e.g. the no-permission message
       if msg == "" and code ~= 0 and code ~= 15 then msg = "AI Mouse crashed:\n" .. err end  -- 15: we ended it
-      if msg ~= "" then showAnswer({ { a = msg } }) end
+      if msg ~= "" then showThread({ { a = msg } }) end
     end,
     function(_, so, se)
       out, err = out .. (so or ""), err .. (se or "")
       if not ready and out:find("^ready\n") then  -- screenshot taken, safe to draw on screen
         ready, out = true, out:sub(7)
-        if explain then think() else
+        if explain then stop = spinner() else
           askQuestion(function(q) if q then ask(q) else task:terminate() end end)
         end
       end
-      local a, rest = out:match("^(.-)\n\30\n(.*)$")  -- \30 = END marker from ask.py
-      if ready and a then
-        out = rest
-        hide()
-        thread[#thread + 1] = { q = pending, a = a:match("^%s*(.-)%s*$") }
-        showAnswer(thread, ask, function() task:terminate() end)
+      if ready and cur then
+        local i = out:find("\30", 1, true)
+        while i and cur do
+          got(out:sub(1, i - 1), true)
+          out = (out:sub(i + 1):gsub("^\n", ""))
+          i = out:find("\30", 1, true)
+        end
+        if cur and out ~= "" then
+          local text
+          text, out = utf8Split(out)
+          if text ~= "" then got(text, false) end
+        end
       end
       return true
     end,

@@ -52,13 +52,14 @@ def ask_model(history, question, images_b64):
             messages.append({"role": "assistant", "content": a})
     body = json.dumps({
         "model": MODEL,
-        "stream": False,
+        "stream": True,
         "think": False,  # ponytail: off for speed; set True for harder questions
         "messages": messages,
     }).encode()
     req = urllib.request.Request(OLLAMA, body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=300) as r:
-        return json.load(r)["message"]["content"].strip()
+        for line in r:  # one JSON object per line as the answer is generated
+            yield json.loads(line)["message"].get("content", "")  # thinking arrives separately, skipped
 
 
 def ask_claude(history, question, image_paths):
@@ -67,34 +68,49 @@ def ask_claude(history, question, image_paths):
     prompt = "Read the screenshots at " + " and ".join(image_paths) + " (in that order)."
     if past:
         prompt += f"\nConversation so far:{past}\nNow answer the follow-up"
-    r = subprocess.run(
+    p = subprocess.Popen(
         [CLAUDE, "-p", f"{prompt}: {question}",
          "--append-system-prompt", SYSTEM,
          "--allowedTools", "Read",
+         "--output-format", "stream-json", "--verbose", "--include-partial-messages",  # stream the text
          "--strict-mcp-config",  # skip MCP servers: faster startup
          "--no-session-persistence"],
-        capture_output=True, text=True, timeout=300,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         cwd=tempfile.gettempdir(),  # keep project CLAUDE.md files out of it
     )
-    if r.returncode != 0:
-        raise OSError(r.stderr.strip() or r.stdout.strip())
-    return r.stdout.strip()
+    streamed = False
+    for line in p.stdout:
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        e = d.get("event", {})
+        if d.get("type") == "stream_event" and e.get("type") == "content_block_delta" \
+                and e["delta"].get("type") == "text_delta":
+            streamed = True
+            yield e["delta"]["text"]
+        elif d.get("type") == "result" and not streamed:  # nothing streamed: use the final text
+            yield d.get("result") or ""
+    if p.wait() != 0 and not streamed:
+        raise OSError(p.stderr.read().strip())
 
 
 def answer(history, question, imgs):
+    """Yields the answer in pieces as the model writes it."""
     if BACKEND == "claude":
         try:
-            return ask_claude(history, question, imgs) or "(no answer)"
-        except (OSError, subprocess.TimeoutExpired) as e:
-            return f"Claude Code failed: {e}"
+            yield from ask_claude(history, question, imgs)
+        except OSError as e:
+            yield f"Claude Code failed: {e}"
+        return
     data = []
     for path in imgs:
         with open(path, "rb") as f:
             data.append(base64.standard_b64encode(f.read()).decode())
     try:
-        return ask_model(history, question, data) or "(no answer)"
+        yield from ask_model(history, question, data)
     except OSError as e:  # URLError is an OSError: Ollama not running, timeout, etc.
-        return f"Couldn't reach Ollama ({e}). Is it running? Try: ollama serve"
+        yield f"Couldn't reach Ollama ({e}). Is it running? Try: ollama serve"
 
 
 def zoom_rect(mx, my, sx, sy, sw, sh):
@@ -132,9 +148,16 @@ def main():
     question = DEFAULT if "--explain" in sys.argv else read_question()
     history = []
     while question is not None:
-        a = answer(history, question, imgs)
+        parts = []
+        for piece in answer(history, question, imgs):
+            print(piece, end="", flush=True)  # Hammerspoon types it out as it arrives
+            parts.append(piece)
+        a = "".join(parts).strip()
+        if not a:
+            a = "(no answer)"
+            print(a, end="")
         history.append((question, a))
-        show(a + "\n" + END)
+        show("\n" + END)
         question = read_question()
 
 
