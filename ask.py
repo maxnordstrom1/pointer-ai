@@ -25,7 +25,10 @@ SYSTEM = (
     "over the full screen, which is only context. Answer their question about it in plain "
     "language, briefly (under 150 words). No markdown, but write any math as LaTeX "
     "between $ signs, e.g. $N'(t) = 13$. Copy formulas exactly as written on screen; if you "
-    "can't read something clearly, say so instead of guessing."
+    "can't read something clearly, say so instead of guessing. Always reply in the language "
+    "of the user's latest question. If that question is exactly \"Explain what I'm pointing "
+    "at.\" (sent when they typed nothing), reply in the language of the text on screen "
+    "around the cursor instead."
 )
 ZOOM_W, ZOOM_H = 480, 320  # close-up size in screen points, centered on the cursor
 

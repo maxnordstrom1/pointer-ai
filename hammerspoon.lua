@@ -115,9 +115,10 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden 
 ::placeholder { color: var(--dim) }
 </style><script>const post = m => webkit.messageHandlers.aimouse.postMessage(m)</script>]]
 
-local panel, follow, escKey, onClose
+local panel, follow, escKey, scrollTap, onClose
 local function closePanel()
   if follow then follow:stop(); follow = nil end
+  if scrollTap then scrollTap:stop(); scrollTap = nil end
   if panel then panel:delete(); panel = nil end
   if escKey then escKey:delete(); escKey = nil end
   if onClose then local f = onClose; onClose = nil; f() end
@@ -130,7 +131,8 @@ local function openPanel(html, w, h, onMsg, closed)
   local size = { w = w, h = h }
   local uc = hs.webview.usercontent.new("aimouse")
   uc:setCallback(function(msg)
-    if msg.body.h then size.h = math.min(msg.body.h, 360) else onMsg(msg.body) end
+    if msg.body.h then size.h, size.overflow = math.min(msg.body.h, 360), msg.body.h > 360
+    else onMsg(msg.body) end
   end)
   panel = hs.webview.new(besideCursor(hs.mouse.absolutePosition(), w, h), {}, uc)
     :windowStyle({ "borderless" })
@@ -144,6 +146,14 @@ local function openPanel(html, w, h, onMsg, closed)
   panel:hswindow():focus()
   onClose = closed
   escKey = hs.hotkey.bind({}, "escape", closePanel)  -- ponytail: swallows Esc everywhere while a panel is open
+  -- The panel rides on the cursor, so the scroll wheel would always hit the window underneath.
+  -- While the conversation overflows the panel, scroll it instead (it scrolls the #b element).
+  scrollTap = hs.eventtap.new({ hs.eventtap.event.types.scrollWheel }, function(e)
+    if not size.overflow then return false end
+    local dy = e:getProperty(hs.eventtap.event.properties.scrollWheelEventPointDeltaAxis1)
+    panel:evaluateJavaScript("b.scrollBy(0, " .. -dy .. ")")
+    return true
+  end):start()
   follow = hs.timer.doEvery(1 / 60, function()
     local p, f = hs.mouse.absolutePosition(), panel:frame()
     local over = p.x >= f.x and p.x <= f.x + f.w and p.y >= f.y and p.y <= f.y + f.h
@@ -189,7 +199,10 @@ input:disabled { opacity: .4 }
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="mathAll()"></script>
 <div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
     (onAsk and [[<div class="ask"><i></i><input id="q" placeholder="Follow up…"></div>]] or "") .. [[</div><script>
-const fit = () => { post({ h: b.scrollHeight + (window.q ? 34 : 0) }); b.scrollTop = b.scrollHeight }  // grow to fit (max 360px), newest in view
+// Grow to fit (max 360px). Stick to the newest text unless the user has scrolled up.
+let stick = true
+b.addEventListener("scroll", () => { stick = b.scrollHeight - b.scrollTop - b.clientHeight < 30 })
+const fit = () => { post({ h: b.scrollHeight + (window.q ? 34 : 0) }); if (stick) b.scrollTop = b.scrollHeight }
 // Render $…$ math with KaTeX. Offline, the script fails to load and the raw text stays.
 const OPTS = { throwOnError: false, delimiters: [
   { left: "$$", right: "$$", display: true }, { left: "\\[", right: "\\]", display: true },
@@ -202,7 +215,7 @@ let cur = null, queue = "", ending = false
 function addQ(text) {
   const p = document.createElement("p"); p.className = "q"; p.textContent = text; b.append(p)
   cur = document.createElement("p"); cur.innerHTML = "<i></i>"; b.append(cur)  // breathing dot until text arrives
-  queue = ""; ending = false
+  queue = ""; ending = false; stick = true
   if (window.q) q.disabled = true
   fit()
 }
@@ -225,6 +238,7 @@ setInterval(() => {
 if (window.q) { q.focus(); q.addEventListener("keydown", e => {
   if (e.key === "Enter" && q.value.trim() && !q.disabled) { post({ q: q.value }); q.value = "" } }) }
 addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); b.scrollBy(0, e.key === "ArrowUp" ? -40 : 40) }
   if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) })
   if (e.metaKey && e.key === "a" && document.activeElement !== window.q) { e.preventDefault(); getSelection().selectAllChildren(b) }
 })
