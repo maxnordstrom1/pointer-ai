@@ -6,7 +6,7 @@ It takes a screenshot of the screen your mouse is on, plus a close-up centred on
 
 ## Requirements
 
-- macOS
+- macOS, Windows or Linux (see [Windows and Linux](#windows-and-linux) for the extra setup)
 - Python 3
 - One of:
   - **Local mode (default):** [Ollama](https://ollama.com) with a vision model. The default is `gemma4`.
@@ -53,6 +53,22 @@ No extra Python packages are needed.
 
    (If your Python or this folder is somewhere else, update `PYTHON` and `SCRIPT` at the top of `hammerspoon.lua`.) Hammerspoon reloads by itself whenever `hammerspoon.lua` changes. Give Hammerspoon **Accessibility** and **Screen Recording** permission, and turn on "Launch Hammerspoon at login" in its settings.
 
+## Windows and Linux
+
+`aimouse.py` does what Hammerspoon does on the Mac: the same hotkeys, orb, cursor-following panel, math, follow-ups and copy. Choose the mode in `ask.py` as in step 1 above, then:
+
+```sh
+pip install -r requirements.txt
+python aimouse.py
+```
+
+Leave it running. **Win+Alt+A** asks and **Win+Alt+E** explains (Super+Alt on Linux); Ctrl+C copies and Alt parks the panel. To start it at login, put a shortcut to `pythonw C:\path\to\aimouse.py` in the folder that `shell:startup` opens (Windows), or add it to your desktop's startup apps (Linux).
+
+- **Windows** needs nothing else. Text recognition and screenshots use what's built into Windows.
+- **Linux** needs `python3-tk`, `xclip` (for copying) and a screenshot tool: `gnome-screenshot`, `spectacle` (KDE), `scrot` or ImageMagick's `import`; `grim` on Sway/Hyprland. Install `tesseract` too, so the model is told which text sits under the cursor.
+- **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/aimouse.py --ask` and `--explain` instead. The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
+
+## Usage
 ## Usage
 
 Hover over something, then:
