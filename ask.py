@@ -41,23 +41,26 @@ def show(text):
     print(text, flush=True)  # Hammerspoon shows stdout in a panel by the cursor
 
 
-# Small models are bad at spotting the language of a short question, so macOS does it (NaturalLanguage,
-# plus Vision OCR of the close-up when nothing was typed). argv: "text" <string> or "image" <path>.
-LANGUAGE_JS = r"""
+# Help for small models, done by macOS on device: NaturalLanguage spots the language of a question,
+# Vision reads the text in the close-up (to find the line under the cursor, and the screen's language).
+VISION_JS = r"""
 ObjC.import("NaturalLanguage"); ObjC.import("Vision")
-// argv: "text" <string> or "image" <path>. Prints the language in English ("Swedish"), or nothing if unsure.
+// argv: "lang" <text>  -> language in English ("Swedish"), or nothing if unsure
+//       "ocr" <path>   -> JSON [[text, x, y, w, h], ...], boxes 0-1 with the origin at the bottom left
 function run(argv) {
-  let text = argv[1]
-  if (argv[0] === "image") {
+  if (argv[0] === "ocr") {
     const req = $.VNRecognizeTextRequest.alloc.init
     req.automaticallyDetectsLanguage = true
     $.VNImageRequestHandler.alloc.initWithURLOptions($.NSURL.fileURLWithPath(argv[1]), $()).performRequestsError($([req]), null)
-    const lines = [], res = req.results
-    for (let i = 0; i < res.count; i++) lines.push(res.objectAtIndex(i).topCandidates(1).firstObject.string.js)
-    text = lines.join(" ")
+    const out = [], res = req.results
+    for (let i = 0; i < res.count; i++) {
+      const o = res.objectAtIndex(i), b = o.boundingBox
+      out.push([o.topCandidates(1).firstObject.string.js, b.origin.x, b.origin.y, b.size.width, b.size.height])
+    }
+    return JSON.stringify(out)
   }
   const r = $.NLLanguageRecognizer.alloc.init
-  r.processString(text)
+  r.processString(argv[1])
   const hyp = r.languageHypothesesWithMaximum(1)
   const code = hyp.allKeys.firstObject
   if (!code.js || hyp.objectForKey(code).js < 0.8) return ""
@@ -66,11 +69,26 @@ function run(argv) {
 """
 
 
-def language(kind, value):
+def vision(*args, wait=True):
+    p = subprocess.Popen(["osascript", "-l", "JavaScript", "-e", VISION_JS, *args],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    return p.communicate()[0].strip() if wait else p
+
+
+def language(text):
     """English name of the language ("Swedish"), or "" if macOS isn't confident."""
-    r = subprocess.run(["osascript", "-l", "JavaScript", "-e", LANGUAGE_JS, kind, value],
-                       capture_output=True, text=True)
-    return r.stdout.strip()
+    return vision("lang", text)
+
+
+def line_at(lines, cx, cy):
+    """Text of the OCR line nearest the point (0-1, origin top left), or "" if none is close."""
+    best, best_d = "", 0.08  # ponytail: nearest single line; widen if the anchor misses multi-line items
+    for text, x, y, w, h in lines:
+        y = 1 - y - h  # Vision's origin is bottom left
+        d = max(x - cx, 0, cx - x - w) + max(y - cy, 0, cy - y - h)
+        if d < best_d:
+            best, best_d = text, d
+    return best
 
 
 def read_question():
@@ -177,18 +195,33 @@ def main():
         subprocess.run(["screencapture", "-C", "-x", "-t", "jpg", "-R" + ",".join(f"{v:.0f}" for v in rect), zoom],
                        check=True)
         imgs.append(zoom)
+    ocr = vision("ocr", imgs[-1], wait=False)  # runs while the user types the question
     print("ready", flush=True)  # screenshot taken: Hammerspoon can now show the question box
 
     # one-press mode skips the first question; follow-ups keep coming until stdin closes
     question = DEFAULT if "--explain" in sys.argv else read_question()
+    try:
+        lines = json.loads(ocr.communicate()[0])
+    except ValueError:
+        lines = []
+    anchor = ""
+    if rect:  # where the cursor sits in the close-up (it's off centre when slid in at a screen edge)
+        # +3pt: the hotspot is the arrow's tip, but people aim with the arrow's body just below it
+        anchor = line_at(lines, (mx - rect[0]) / rect[2], (my + 3 - rect[1]) / rect[3])
     history, lang = [], ""
     while question is not None:
         if question == DEFAULT:  # nothing typed: the language of the text by the cursor
-            lang = language("image", imgs[-1]) or lang
+            lang = language(" ".join(t[0] for t in lines)) or lang
         else:
-            lang = language("text", question) or lang  # "ok", "why?": keep the previous language
+            lang = language(question) or lang  # "ok", "why?": keep the previous language
+        notes = []
+        if anchor and not history:  # small models drift to whatever stands out, so name the spot
+            notes.append(f"The text under the cursor reads roughly: \"{anchor}\" (machine-read, so "
+                         "symbols may be garbled: take exact math from the image). Answer about that.")
         if lang:
-            question += f"\n\n(Reply in {lang}.)"
+            notes.append(f"Reply in {lang}.")
+        if notes:
+            question += "\n\n(" + " ".join(notes) + ")"
         parts = []
         for piece in answer(history, question, imgs):
             print(piece, end="", flush=True)  # Hammerspoon types it out as it arrives
@@ -206,4 +239,6 @@ if __name__ == "__main__":
     assert zoom_rect(500, 400, 0, 0, 1440, 900) == (260, 240, 480, 320)  # centered
     assert zoom_rect(5, 890, 0, 0, 1440, 900) == (0, 580, 480, 320)  # slid in at a corner
     assert zoom_rect(-800, 100, -1920, 0, 1920, 1080) == (-1040, 0, 480, 320)  # screen left of main
+    box = [["far", 0.0, 0.9, 0.1, 0.05], ["b) here", 0.41, 0.45, 0.13, 0.04]]  # Vision boxes, origin bottom left
+    assert line_at(box, 0.5, 0.5) == "b) here" and line_at(box, 0.9, 0.1) == ""
     main()
