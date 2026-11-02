@@ -2,7 +2,7 @@
 
 Point at anything on your screen, press a hotkey, ask a question, and get a plain-language explanation in a popup.
 
-It takes a screenshot that includes your mouse cursor, so the AI can see what you're pointing at. Leave the question box empty to just get "what is this?"
+It takes a screenshot of the screen your mouse is on, plus a close-up centred on the cursor, so the AI knows exactly what you're pointing at. Leave the question box empty to just get "what is this?"
 
 ## Requirements
 
@@ -60,7 +60,7 @@ Hover over something, then:
 - **⌥⌘A**: a small question box appears by the cursor. Type a question (or leave it empty) and press Return. Esc cancels.
 - **⌥⌘E**: skip the question and just explain what you're pointing at.
 
-A small animated orb follows your cursor while the AI works, then the answer appears in a panel that follows the cursor. Press ⌘C to copy it all, or hold ⌥ to park the panel so you can move onto it to select text or scroll. Esc closes it.
+A small animated orb follows your cursor while the AI works, then the answer appears in a panel that follows the cursor. Type a follow-up at the bottom and press Return to keep asking about the same screenshot. Press ⌘C to copy it all, or hold ⌥ to park the panel so you can move onto it to select text or scroll. Esc closes it.
 
 ## Modes compared
 
@@ -76,6 +76,7 @@ A small animated orb follows your cursor while the AI works, then the answer app
 
 - **Smaller local model:** if your Mac feels slow, try `ollama pull qwen2.5vl:3b` or `moondream` and change `MODEL`. Text-only models such as `llama3.1` or `qwen2.5` won't work. Check for "vision" in `ollama show <model>`.
 - **Smarter local answers:** set `"think": False` to `True` in `ask_model`. Answers get slower but better.
+- **Bigger or smaller close-up:** change `ZOOM_W, ZOOM_H` in `ask.py`. Smaller focuses the AI more tightly on the cursor; bigger gives it more surroundings.
 - **Longer answers:** edit the "under 150 words" line in `SYSTEM`.
 
 ## Troubleshooting

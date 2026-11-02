@@ -98,8 +98,8 @@ end
 
 -- Soft monochrome look to match the orb; follows the system light/dark setting like the orb does
 local STYLE = [[<!doctype html><meta charset="utf-8"><style>
-:root { color-scheme: light dark; --bg: rgba(250,250,250,.86); --ink: rgba(0,0,0,.74); --dim: rgba(0,0,0,.35); --edge: rgba(0,0,0,.08) }
-@media (prefers-color-scheme: dark) { :root { --bg: rgba(24,24,26,.86); --ink: rgba(255,255,255,.80); --dim: rgba(255,255,255,.38); --edge: rgba(255,255,255,.10) } }
+:root { color-scheme: light dark; --bg: rgba(250,250,250,.97); --ink: rgba(0,0,0,.74); --dim: rgba(0,0,0,.35); --edge: rgba(0,0,0,.08) }
+@media (prefers-color-scheme: dark) { :root { --bg: rgba(24,24,26,.97); --ink: rgba(255,255,255,.80); --dim: rgba(255,255,255,.38); --edge: rgba(255,255,255,.10) } }
 html, body { margin: 0; height: 100%; background: transparent; overflow: hidden }
 .box { box-sizing: border-box; height: 100%; border-radius: 14px; background: var(--bg); color: var(--ink);
        box-shadow: inset 0 0 0 .5px var(--edge); font: 12.5px/1.5 -apple-system, sans-serif;
@@ -154,16 +154,41 @@ local function htmlEscape(s)
   return (s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 end
 
--- Answer panel. Select with the mouse (hold ⌥ first) or ⌘C to copy, everything if nothing is selected. Esc closes.
-local function showAnswer(text)
-  openPanel([[<style>#b { overflow: auto; padding: 10px 14px; white-space: pre-wrap; cursor: text }</style>
-<div class="box" id="b">]] .. htmlEscape(text) .. [[</div><script>
-post({ h: b.scrollHeight })  // grow to fit, up to 360px, then scroll
+-- Answer panel: the whole thread, newest at the bottom, plus a follow-up line when onAsk is given.
+-- Select with the mouse (hold ⌥ first) or ⌘C to copy, everything if nothing is selected. Esc closes.
+local function showAnswer(thread, onAsk, closed)
+  local parts = {}
+  for _, t in ipairs(thread) do
+    if t.q then parts[#parts + 1] = '<p class="q">' .. htmlEscape(t.q) .. "</p>" end
+    parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"
+  end
+  local sent = false
+  openPanel([[<style>
+.box { display: flex; flex-direction: column }
+#b { flex: 1; overflow: auto; padding: 0 14px; white-space: pre-wrap; cursor: text }
+p { margin: 10px 0 } .q { color: var(--dim) }
+.ask { flex: none; height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 14px;
+       box-shadow: inset 0 .5px 0 var(--edge) }
+i { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); animation: breathe 2.4s ease-in-out infinite }
+input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
+</style><div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
+    (onAsk and [[<div class="ask"><i></i><input id="q" placeholder="Follow up…"></div>]] or "") .. [[</div><script>
+post({ h: b.scrollHeight + (window.q ? 34 : 0) })  // grow to fit, up to 360px, then scroll
+b.scrollTop = b.scrollHeight  // newest answer in view
+if (window.q) { q.focus(); q.addEventListener("keydown", e => { if (e.key === "Enter" && q.value.trim()) post({ q: q.value }) }) }
 addEventListener("keydown", e => {
   if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) || b.innerText })
-  if (e.metaKey && e.key === "a") { e.preventDefault(); getSelection().selectAllChildren(b) }
+  if (e.metaKey && e.key === "a" && document.activeElement !== window.q) { e.preventDefault(); getSelection().selectAllChildren(b) }
 })
-</script>]], 340, 40, function(m) if m.copy then hs.pasteboard.setContents(m.copy) end end)
+</script>]], 340, 40,
+    function(m)
+      if m.copy then hs.pasteboard.setContents(m.copy)
+      elseif m.q and not sent then
+        sent = true
+        hs.timer.doAfter(0, function() closePanel(); onAsk(m.q) end)  -- not from inside the panel's own callback
+      end
+    end,
+    function() if not sent and closed then closed() end end)
 end
 
 -- Question box by the cursor. Calls done(question), or done(nil) on Esc.
@@ -188,30 +213,41 @@ q.addEventListener("keydown", e => { if (e.key === "Enter") post({ q: q.value })
     function() if not sent then done(nil) end end)
 end
 
+-- One conversation per hotkey press: same screenshot, follow-ups until Esc
 local function aiMouse(explain)
   closePanel()
   local out, err, ready, stop, task = "", "", false, nil, nil
+  local thread, pending = {}, explain and "Explain what I'm pointing at." or nil
   local function hide() if stop then stop(); stop = nil end end
   local function think() if not stop then stop = spinner() end end
+  local function ask(q) pending = q; task:setInput(q .. "\n"); think() end
+  local p, f = hs.mouse.absolutePosition(), hs.mouse.getCurrentScreen():fullFrame()
+  local args = { SCRIPT, "--at", ("%.0f,%.0f"):format(p.x, p.y), "--screen", ("%.0f,%.0f,%.0f,%.0f"):format(f.x, f.y, f.w, f.h) }
+  if explain then args[#args + 1] = "--explain" end
   task = hs.task.new(PYTHON, function(code)
       hide()
-      local answer = out:gsub("^ready\n", ""):match("^%s*(.-)%s*$")
-      if answer == "" and code ~= 0 and code ~= 15 then answer = "AI Mouse crashed:\n" .. err end  -- 15: we cancelled it
-      if answer ~= "" then showAnswer(answer) end
+      local msg = out:match("^%s*(.-)%s*$")  -- leftovers, e.g. the no-permission message
+      if msg == "" and code ~= 0 and code ~= 15 then msg = "AI Mouse crashed:\n" .. err end  -- 15: we ended it
+      if msg ~= "" then showAnswer({ { a = msg } }) end
     end,
     function(_, so, se)
       out, err = out .. (so or ""), err .. (se or "")
       if not ready and out:find("^ready\n") then  -- screenshot taken, safe to draw on screen
-        ready = true
+        ready, out = true, out:sub(7)
         if explain then think() else
-          askQuestion(function(q)
-            if q then task:setInput(q .. "\n"); think() else task:terminate() end
-          end)
+          askQuestion(function(q) if q then ask(q) else task:terminate() end end)
         end
+      end
+      local a, rest = out:match("^(.-)\n\30\n(.*)$")  -- \30 = END marker from ask.py
+      if ready and a then
+        out = rest
+        hide()
+        thread[#thread + 1] = { q = pending, a = a:match("^%s*(.-)%s*$") }
+        showAnswer(thread, ask, function() task:terminate() end)
       end
       return true
     end,
-    explain and { SCRIPT, "--explain" } or { SCRIPT })
+    args)
   task:start()
 end
 
