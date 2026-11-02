@@ -51,7 +51,7 @@ No extra Python packages are needed.
    dofile(os.getenv("HOME") .. "/Desktop/AI_mouse_agent/hammerspoon.lua")
    ```
 
-   (If your Python or this folder is somewhere else, update `PYTHON` and `SCRIPT` at the top of `hammerspoon.lua`.) Give Hammerspoon **Accessibility** and **Screen Recording** permission, and turn on "Launch Hammerspoon at login" in its settings.
+   (If your Python or this folder is somewhere else, update `PYTHON` and `SCRIPT` at the top of `hammerspoon.lua`.) Hammerspoon reloads by itself whenever `hammerspoon.lua` changes. Give Hammerspoon **Accessibility** and **Screen Recording** permission, and turn on "Launch Hammerspoon at login" in its settings.
 
 ## Usage
 
@@ -60,7 +60,7 @@ Hover over something, then:
 - **⌥⌘A**: a small question box appears by the cursor. Type a question (or leave it empty) and press Return. Esc cancels.
 - **⌥⌘E**: skip the question and just explain what you're pointing at.
 
-A small animated orb follows your cursor while the AI works, then the answer appears in a panel that follows the cursor. Type a follow-up at the bottom and press Return to keep asking about the same screenshot. Press ⌘C to copy it all, or hold ⌥ to park the panel so you can move onto it to select text or scroll. Esc closes it.
+A small animated orb follows your cursor while the AI works, then the answer appears in a panel that follows the cursor. Math is shown as proper formulas (needs internet; offline you see the raw LaTeX). Type a follow-up at the bottom and press Return to keep asking about the same screenshot. Press ⌘C to copy it all, or hold ⌥ to park the panel so you can move onto it to select text or scroll. Esc closes it.
 
 ## Modes compared
 

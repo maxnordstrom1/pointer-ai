@@ -23,7 +23,9 @@ SYSTEM = (
     "second image, it is a close-up centered exactly on the mouse cursor: the user is "
     "pointing at whatever is under the cursor at the center of that close-up, so trust it "
     "over the full screen, which is only context. Answer their question about it in plain "
-    "language, briefly (under 150 words). No markdown."
+    "language, briefly (under 150 words). No markdown, but write any math as LaTeX "
+    "between $ signs, e.g. $N'(t) = 13$. Copy formulas exactly as written on screen; if you "
+    "can't read something clearly, say so instead of guessing."
 )
 ZOOM_W, ZOOM_H = 480, 320  # close-up size in screen points, centered on the cursor
 

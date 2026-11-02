@@ -2,6 +2,11 @@
 local PYTHON = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
 local SCRIPT = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/ask.py"
 
+-- Reload Hammerspoon when this file changes, so edits take effect without a manual reload
+AIMouseWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/Desktop/AI_mouse_agent/", function(paths)
+  for _, p in ipairs(paths) do if p:match("%.lua$") then hs.reload(); return end end
+end):start()  -- global so it isn't garbage-collected
+
 -- "Breathing" orb, ported from thinking-orbs by Jakub Antalik (MIT):
 -- https://github.com/Jakubantalik/thinking-orbs (ring mode, size-20 preset)
 local ORB, PAD = 20, 3
@@ -157,10 +162,10 @@ end
 -- Answer panel: the whole thread, newest at the bottom, plus a follow-up line when onAsk is given.
 -- Select with the mouse (hold ⌥ first) or ⌘C to copy, everything if nothing is selected. Esc closes.
 local function showAnswer(thread, onAsk, closed)
-  local parts = {}
+  local parts, raw = {}, {}
   for _, t in ipairs(thread) do
-    if t.q then parts[#parts + 1] = '<p class="q">' .. htmlEscape(t.q) .. "</p>" end
-    parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"
+    if t.q then parts[#parts + 1] = '<p class="q">' .. htmlEscape(t.q) .. "</p>"; raw[#raw + 1] = t.q end
+    parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"; raw[#raw + 1] = t.a
   end
   local sent = false
   openPanel([[<style>
@@ -171,18 +176,30 @@ p { margin: 10px 0 } .q { color: var(--dim) }
        box-shadow: inset 0 .5px 0 var(--edge) }
 i { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); animation: breathe 2.4s ease-in-out infinite }
 input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
-</style><div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
+.katex { font-size: 1.1em }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="math()"></script>
+<div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
     (onAsk and [[<div class="ask"><i></i><input id="q" placeholder="Follow up…"></div>]] or "") .. [[</div><script>
-post({ h: b.scrollHeight + (window.q ? 34 : 0) })  // grow to fit, up to 360px, then scroll
-b.scrollTop = b.scrollHeight  // newest answer in view
+const fit = () => { post({ h: b.scrollHeight + (window.q ? 34 : 0) }); b.scrollTop = b.scrollHeight }  // grow to fit (max 360px), newest in view
+fit()
+// Render $…$ math with KaTeX. Offline, the script fails to load and the raw text stays.
+function math() {
+  renderMathInElement(b, { throwOnError: false, delimiters: [
+    { left: "$$", right: "$$", display: true }, { left: "\\[", right: "\\]", display: true },
+    { left: "$", right: "$", display: false }, { left: "\\(", right: "\\)", display: false } ] })
+  fit()
+}
 if (window.q) { q.focus(); q.addEventListener("keydown", e => { if (e.key === "Enter" && q.value.trim()) post({ q: q.value }) }) }
 addEventListener("keydown", e => {
-  if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) || b.innerText })
+  if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) })
   if (e.metaKey && e.key === "a" && document.activeElement !== window.q) { e.preventDefault(); getSelection().selectAllChildren(b) }
 })
 </script>]], 340, 40,
     function(m)
-      if m.copy then hs.pasteboard.setContents(m.copy)
+      if m.copy then hs.pasteboard.setContents(m.copy ~= "" and m.copy or table.concat(raw, "\n\n"))  -- unrendered math
       elseif m.q and not sent then
         sent = true
         hs.timer.doAfter(0, function() closePanel(); onAsk(m.q) end)  -- not from inside the panel's own callback
