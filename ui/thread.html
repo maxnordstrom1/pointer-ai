@@ -10,9 +10,10 @@ input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: 
 input:disabled { opacity: .4 }
 .katex { font-size: 1.1em }
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="mathAll()"></script>
+<!-- pinned with integrity hashes: this page can ask the model and write to the clipboard -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous" onload="mathAll()"></script>
 <div class="box"><div id="b">{{THREAD}}</div><!--ask--><div class="ask"><i></i><input id="q" placeholder="Follow up…"></div><!--/ask--></div><script>
 // Grow to fit (max 360px). Stick to the newest text unless the user has scrolled up.
 let stick = true

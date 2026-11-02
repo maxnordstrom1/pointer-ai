@@ -11,6 +11,7 @@ import functools
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -228,7 +229,8 @@ def ask_claude(history, question, image_paths):
          "--strict-mcp-config",  # skip MCP servers: faster startup
          "--no-session-persistence"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-        cwd=tempfile.gettempdir(), creationflags=NO_WINDOW,  # keep project CLAUDE.md files out of it
+        # our private folder: no project CLAUDE.md or settings, and nothing other users could plant (/tmp is shared)
+        cwd=os.path.dirname(image_paths[0]), creationflags=NO_WINDOW,
     )
     streamed = False
     for line in p.stdout:
@@ -328,7 +330,15 @@ def grab_other(img, zoom):
 def main():
     for f in (sys.stdin, sys.stdout):
         f.reconfigure(encoding="utf-8")  # Windows pipes default to a legacy code page
-    tmp = tempfile.gettempdir()
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit())  # closing the panel: clean up below
+    tmp = tempfile.mkdtemp(prefix="ai_mouse_")  # private (0700): screenshots stay yours
+    try:
+        run(tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def run(tmp):
     ext = "jpg" if MAC else "png"
     img, zoom = os.path.join(tmp, "ai_mouse." + ext), os.path.join(tmp, "ai_mouse_zoom." + ext)
     shot = (grab_mac if MAC else grab_other)(img, zoom)
