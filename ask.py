@@ -41,6 +41,38 @@ def show(text):
     print(text, flush=True)  # Hammerspoon shows stdout in a panel by the cursor
 
 
+# Small models are bad at spotting the language of a short question, so macOS does it (NaturalLanguage,
+# plus Vision OCR of the close-up when nothing was typed). argv: "text" <string> or "image" <path>.
+LANGUAGE_JS = r"""
+ObjC.import("NaturalLanguage"); ObjC.import("Vision")
+// argv: "text" <string> or "image" <path>. Prints the language in English ("Swedish"), or nothing if unsure.
+function run(argv) {
+  let text = argv[1]
+  if (argv[0] === "image") {
+    const req = $.VNRecognizeTextRequest.alloc.init
+    req.automaticallyDetectsLanguage = true
+    $.VNImageRequestHandler.alloc.initWithURLOptions($.NSURL.fileURLWithPath(argv[1]), $()).performRequestsError($([req]), null)
+    const lines = [], res = req.results
+    for (let i = 0; i < res.count; i++) lines.push(res.objectAtIndex(i).topCandidates(1).firstObject.string.js)
+    text = lines.join(" ")
+  }
+  const r = $.NLLanguageRecognizer.alloc.init
+  r.processString(text)
+  const hyp = r.languageHypothesesWithMaximum(1)
+  const code = hyp.allKeys.firstObject
+  if (!code.js || hyp.objectForKey(code).js < 0.8) return ""
+  return $.NSLocale.localeWithLocaleIdentifier("en").localizedStringForLanguageCode(code).js
+}
+"""
+
+
+def language(kind, value):
+    """English name of the language ("Swedish"), or "" if macOS isn't confident."""
+    r = subprocess.run(["osascript", "-l", "JavaScript", "-e", LANGUAGE_JS, kind, value],
+                       capture_output=True, text=True)
+    return r.stdout.strip()
+
+
 def read_question():
     """Next question from stdin (Hammerspoon sends it there), or None once stdin closes."""
     line = sys.stdin.readline()
@@ -149,8 +181,14 @@ def main():
 
     # one-press mode skips the first question; follow-ups keep coming until stdin closes
     question = DEFAULT if "--explain" in sys.argv else read_question()
-    history = []
+    history, lang = [], ""
     while question is not None:
+        if question == DEFAULT:  # nothing typed: the language of the text by the cursor
+            lang = language("image", imgs[-1]) or lang
+        else:
+            lang = language("text", question) or lang  # "ok", "why?": keep the previous language
+        if lang:
+            question += f"\n\n(Reply in {lang}.)"
         parts = []
         for piece in answer(history, question, imgs):
             print(piece, end="", flush=True)  # Hammerspoon types it out as it arrives
