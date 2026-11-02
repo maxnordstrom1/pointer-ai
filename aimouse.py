@@ -1,6 +1,7 @@
 """AI Mouse for Windows and Linux: the same hotkeys, orb and cursor-following panel as hammerspoon.lua on macOS.
 
-    python aimouse.py            stays in the background: Win+Alt+A asks, Win+Alt+E just explains
+    python aimouse.py            stays in the background: Win+Alt+A asks, Win+Alt+E just explains,
+                                 hold Win+Alt+S and speak to ask out loud (listen.py)
     python aimouse.py --ask      one conversation, then quits (bind it to a desktop shortcut on Wayland)
     python aimouse.py --explain  the same, skipping the question
 
@@ -23,6 +24,7 @@ from pynput import keyboard, mouse
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 ASK = os.path.join(DIR, "ask.py")
+LISTEN = os.path.join(DIR, "listen.py")
 DEFAULT = "Explain what I'm pointing at."
 END = "\x1e"  # ask.py prints this after each answer
 WIN = sys.platform == "win32"
@@ -32,6 +34,8 @@ HOTKEYS = {"<cmd>+<alt>+a": False, "<cmd>+<alt>+e": True}  # <cmd> is the Window
 
 pointer = mouse.Controller()
 alt = False  # held: the panel stays put, so you can move onto it to select text
+held = set()  # keys down right now
+listening = None  # while Win+Alt+S is held: an Event, set when it's let go
 panel = orb = task = None  # the open Panel, the orb window, the running ask.py
 orb_on = False
 
@@ -199,20 +203,21 @@ def show_thread(thread, on_ask=None, on_close=None):
     return Panel(page, 340, 40, on_msg, on_close)
 
 
-def ai_mouse(explain, done=None):
-    """One conversation: same screenshot, follow-ups until Esc. ask.py streams each answer and ends it with END."""
+def ai_mouse(explain, done=None, voice=False):
+    """One conversation: same screenshot, follow-ups until Esc. ask.py streams each answer and ends it with END.
+    With voice (an Event), the first question is spoken instead: listen.py records until the Event is set."""
     global task
     close_panel()
     if task:
-        task.kill()
+        task.terminate()
     task = proc = subprocess.Popen([sys.executable, ASK] + (["--explain"] if explain else []), stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
-    thread, cur, view, ended = [], None, None, False
+    thread, cur, view, ended, ready = [], None, None, False, False
 
     def end():
         nonlocal ended
         ended = True
-        proc.kill()
+        proc.terminate()  # lets ask.py delete its screenshots
         spinner(False)
         if done:
             done()
@@ -224,8 +229,8 @@ def ai_mouse(explain, done=None):
         proc.stdin.flush()
         if view:
             view.js(f"addQ({json.dumps(q)})")
-        else:
-            spinner(True)  # orb until the panel exists
+        elif ready:  # orb until the panel exists, but not before the screenshot, or it would be in it
+            spinner(True)
 
     def got(text, finished):
         nonlocal view, cur
@@ -241,8 +246,29 @@ def ai_mouse(explain, done=None):
             cur = None
             view.js("finish()")
 
+    if voice:
+        rec = subprocess.Popen([sys.executable, LISTEN], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               text=True, encoding="utf-8", creationflags=NO_WINDOW)
+
+        def let_go():
+            voice.wait()
+            try:
+                rec.stdin.write("\n")
+                rec.stdin.flush()
+            except OSError:
+                pass  # already quit (e.g. no ffmpeg)
+        threading.Thread(target=let_go, daemon=True).start()
+
+        def heard():
+            said = rec.stdout.read().strip()
+            if rec.wait() == 0 and said and proc.poll() is None:
+                return ask(said)
+            end()  # heard nothing, ask.py already quit, or an error (no microphone, no whisper)
+            if rec.returncode and said:
+                show_thread([{"a": said}])
+        threading.Thread(target=heard, daemon=True).start()
+
     out, dec = "", codecs.getincrementaldecoder("utf-8")("replace")  # a read can end mid-character
-    ready = False
     while chunk := proc.stdout.read1(4096):
         out += dec.decode(chunk)
         if not ready and out.startswith("ready\n"):  # screenshot taken, safe to draw on screen
@@ -250,6 +276,8 @@ def ai_mouse(explain, done=None):
             if explain:
                 cur = {"q": DEFAULT, "a": ""}
                 spinner(True)
+            elif voice:
+                spinner(True)  # ponytail: same orb for listening and thinking
             else:
                 sent = False
 
@@ -283,12 +311,22 @@ def ai_mouse(explain, done=None):
 
 
 def on_key(k, down):
-    global alt
-    if k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr):
+    global alt, listening
+    k = key_listener.canonical(k)  # alt_l -> alt, "S" -> "s"
+    if k == keyboard.Key.alt_gr:
+        k = keyboard.Key.alt
+    if k == keyboard.Key.alt:
         alt = down
     elif down and k == keyboard.Key.esc and panel:
         threading.Thread(target=close_panel).start()
-
+    speak = getattr(k, "char", None) == "s" or getattr(k, "vk", None) == (0x53 if WIN else 0x73)  # S, by name or key code
+    if down and speak and {keyboard.Key.cmd, keyboard.Key.alt} <= held and not listening:  # not key repeat
+        listening = threading.Event()
+        threading.Thread(target=ai_mouse, args=(False, None, listening)).start()
+    elif not down and (speak or k in (keyboard.Key.cmd, keyboard.Key.alt)) and listening:
+        listening.set()
+        listening = None
+    (held.add if down else held.discard)(k)
 
 def on_scroll(x, y, dx, dy):
     # The panel rides beside the cursor, so the wheel would always hit the window underneath. While the

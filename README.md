@@ -62,11 +62,11 @@ pip install -r requirements.txt
 python aimouse.py
 ```
 
-Leave it running. **Win+Alt+A** asks and **Win+Alt+E** explains (Super+Alt on Linux); Ctrl+C copies and Alt parks the panel. To start it at login, put a shortcut to `pythonw C:\path\to\aimouse.py` in the folder that `shell:startup` opens (Windows), or add it to your desktop's startup apps (Linux).
+Leave it running. **Win+Alt+A** asks, **Win+Alt+E** explains and holding **Win+Alt+S** lets you speak (Super+Alt on Linux; voice needs the setup under [Voice](#voice)); Ctrl+C copies and Alt parks the panel. To start it at login, put a shortcut to `pythonw C:\path\to\aimouse.py` in the folder that `shell:startup` opens (Windows), or add it to your desktop's startup apps (Linux).
 
 - **Windows** needs nothing else. Text recognition and screenshots use what's built into Windows.
 - **Linux** needs `python3-tk`, `xclip` (for copying) and a screenshot tool: `gnome-screenshot`, `spectacle` (KDE), `scrot` or ImageMagick's `import`; `grim` on Sway/Hyprland. Install `tesseract` too, so the model is told which text sits under the cursor.
-- **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/aimouse.py --ask` and `--explain` instead. The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
+- **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/aimouse.py --ask` and `--explain` instead (no voice: desktop shortcuts can't tell when you let go). The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
 
 ## Usage
 ## Usage
@@ -81,7 +81,7 @@ A small animated orb follows your cursor while the AI works, then the answer typ
 
 ## Voice
 
-Hold ⌥⌘S, say your question, and let go. `listen.py` records the microphone with ffmpeg and turns your speech into text on your own computer with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), in whatever language you speak. One-time setup:
+Hold ⌥⌘S (Win+Alt+S on Windows and Linux), say your question, and let go. `listen.py` records the microphone with ffmpeg and turns your speech into text on your own computer with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), in whatever language you speak. One-time setup:
 
 ```sh
 brew install ffmpeg whisper-cpp
@@ -90,7 +90,7 @@ curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-base.bin https://huggingface.co/
 curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 ```
 
-The first time, macOS asks to let Hammerspoon use the microphone. `listen.py` works on Windows (ffmpeg's `dshow`, first microphone) and Linux (PulseAudio/PipeWire) too: start it, send a line on stdin to stop recording, and it prints the text. For better accuracy, download `ggml-small.bin` instead and change `MODEL` in `listen.py`.
+The first time, macOS asks to let Hammerspoon use the microphone. On Windows and Linux, install ffmpeg and whisper.cpp (`whisper-cli` on your PATH) and download the same two files into `models/`. Windows records from the first microphone ffmpeg lists; Linux from the default PulseAudio/PipeWire input. For better accuracy, download `ggml-small.bin` instead and change `MODEL` in `listen.py`.
 
 ## Modes compared
 
