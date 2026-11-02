@@ -59,8 +59,22 @@ Hover over something, then:
 
 - **⌥⌘A**: a small question box appears by the cursor. Type a question (or leave it empty) and press Return. Esc cancels.
 - **⌥⌘E**: skip the question and just explain what you're pointing at.
+- **Hold ⌥⌘S**: speak your question, let go to send it (see Voice below).
 
 A small animated orb follows your cursor while the AI works, then the answer types itself out in a panel that follows the cursor, as the AI writes it. Math is shown as proper formulas (needs internet; offline you see the raw LaTeX). Type a follow-up at the bottom and press Return to keep asking about the same screenshot; the panel stays open and the conversation builds up in it. Press ⌘C to copy it all, Once the conversation is longer than the panel, your scroll wheel (or ↑/↓) scrolls it. Hold ⌥ to park the panel so you can move onto it to select text. Esc closes it.
+
+## Voice
+
+Hold ⌥⌘S, say your question, and let go. `listen.py` records the microphone with ffmpeg and turns your speech into text on your own computer with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), in whatever language you speak. One-time setup:
+
+```sh
+brew install ffmpeg whisper-cpp
+mkdir -p ~/Desktop/AI_mouse_agent/models
+curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+```
+
+The first time, macOS asks to let Hammerspoon use the microphone. `listen.py` works on Windows (ffmpeg's `dshow`, first microphone) and Linux (PulseAudio/PipeWire) too: start it, send a line on stdin to stop recording, and it prints the text. For better accuracy, download `ggml-small.bin` instead and change `MODEL` in `listen.py`.
 
 ## Modes compared
 
