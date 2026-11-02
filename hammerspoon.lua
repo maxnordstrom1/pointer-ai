@@ -1,6 +1,7 @@
--- AI Mouse: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it
+-- AI Mouse: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it, hold ⌥⌘S to speak it
 local PYTHON = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
 local SCRIPT = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/ask.py"
+local LISTEN = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/listen.py"
 
 -- Reload Hammerspoon when this file changes, so edits take effect without a manual reload
 AIMouseWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/Desktop/AI_mouse_agent/", function(paths)
@@ -304,8 +305,9 @@ q.addEventListener("keydown", e => { if (e.key === "Enter") post({ q: q.value })
 end
 
 -- One conversation per hotkey press: same screenshot, follow-ups until Esc. ask.py streams each answer
--- in pieces and ends it with \30 (END).
-local function aiMouse(explain)
+-- in pieces and ends it with \30 (END). With voice, the first question is spoken instead of typed:
+-- listen.py records until the returned function is called (hotkey let go), then it's asked.
+local function aiMouse(explain, voice)
   closePanel()
   local out, err, ready, stop, task, view = "", "", false, nil, nil, nil
   local thread, cur = {}, explain and { q = "Explain what I'm pointing at.", a = "" } or nil
@@ -314,7 +316,8 @@ local function aiMouse(explain)
   local function ask(q)
     cur = { q = q, a = "" }
     task:setInput(q .. "\n")
-    if view then view("addQ(" .. js(q) .. ")") elseif not stop then stop = spinner() end  -- orb until the panel exists
+    -- orb until the panel exists, but not before the screenshot, or it would be in it
+    if view then view("addQ(" .. js(q) .. ")") elseif not stop and ready then stop = spinner() end
   end
   local function got(text, finished)
     if not view then
@@ -342,7 +345,7 @@ local function aiMouse(explain)
       out, err = out .. (so or ""), err .. (se or "")
       if not ready and out:find("^ready\n") then  -- screenshot taken, safe to draw on screen
         ready, out = true, out:sub(7)
-        if explain then stop = spinner() else
+        if explain or voice then stop = stop or spinner() else  -- ponytail: same orb for listening and thinking
           askQuestion(function(q) if q then ask(q) else task:terminate() end end)
         end
       end
@@ -363,7 +366,21 @@ local function aiMouse(explain)
     end,
     args)
   task:start()
+  if not voice then return end
+  local listen = hs.task.new(PYTHON, function(code, so)
+    local said = (so or ""):match("^%s*(.-)%s*$")
+    if code == 0 and said ~= "" and task:isRunning() then return ask(said) end
+    hide(); ended()  -- heard nothing, ask.py already quit, or an error (no mic permission, no whisper)
+    if code ~= 0 and said ~= "" then showThread({ { a = said } }) end
+  end, { LISTEN })
+  listen:start()
+  return function() listen:setInput("\n") end
 end
 
 hs.hotkey.bind({ "alt", "cmd" }, "A", function() aiMouse(false) end)
 hs.hotkey.bind({ "alt", "cmd" }, "E", function() aiMouse(true) end)
+-- Hold ⌥⌘S and speak your question; let go to send it
+local stopListening
+hs.hotkey.bind({ "alt", "cmd" }, "S",
+  function() stopListening = aiMouse(false, true) end,
+  function() if stopListening then stopListening(); stopListening = nil end end)
