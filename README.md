@@ -86,11 +86,11 @@ Hold ⌥⌘S (Win+Alt+S on Windows and Linux), say your question, and let go. `l
 ```sh
 brew install ffmpeg whisper-cpp
 mkdir -p ~/Desktop/AI_mouse_agent/models
-curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 ```
 
-The first time, macOS asks to let Hammerspoon use the microphone. On Windows and Linux, install ffmpeg and whisper.cpp (`whisper-cli` on your PATH) and download the same two files into `models/`. Windows records from the first microphone ffmpeg lists; Linux from the default PulseAudio/PipeWire input. For better accuracy, download `ggml-small.bin` instead and change `MODEL` in `listen.py`.
+The first time, macOS asks to let Hammerspoon use the microphone. On Windows and Linux, install ffmpeg and whisper.cpp (`whisper-cli` on your PATH) and download the same two files into `models/`. Windows records from the first microphone ffmpeg lists; Linux from the default PulseAudio/PipeWire input. For faster but less accurate recognition, download `ggml-base.bin` instead and change `MODEL` in `listen.py`.
 
 ## Modes compared
 

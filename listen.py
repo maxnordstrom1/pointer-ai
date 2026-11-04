@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODEL = os.path.join(HERE, "models", "ggml-base.bin")  # multilingual; ggml-small.bin is better but slower
+MODEL = os.path.join(HERE, "models", "ggml-small.bin")  # multilingual; ggml-base.bin is faster but mishears more
 VAD = os.path.join(HERE, "models", "ggml-silero-v5.1.2.bin")  # skips silence, which Whisper fills with made-up words
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # Windows: no console flashing up
 # Hammerspoon and Shortcuts run with a bare PATH, so also look where Homebrew puts things
@@ -37,7 +37,7 @@ def main():
     for f in (sys.stdin, sys.stdout):
         f.reconfigure(encoding="utf-8")
     if not os.path.exists(MODEL):
-        print(f"Voice needs a Whisper model at {MODEL}. Download ggml-base.bin from "
+        print(f"Voice needs a Whisper model at {MODEL}. Download ggml-small.bin from "
               "https://huggingface.co/ggerganov/whisper.cpp/tree/main", flush=True)
         return 1
     with tempfile.TemporaryDirectory(prefix="ai_mouse_") as tmp:  # private (0700) and removed afterwards
