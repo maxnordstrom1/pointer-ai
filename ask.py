@@ -26,7 +26,8 @@ SYSTEM = (
     "You are a helpful assistant. The first image is the user's screen. If there is a "
     "second image, it is a close-up centered exactly on the mouse cursor: the user is "
     "pointing at whatever is under the cursor at the center of that close-up, so trust it "
-    "over the full screen, which is only context. Answer their question about it in plain "
+    "over the full screen, which is only context. If there is a third image, it is a tight "
+    "crop of exactly what is under the cursor: that is what they mean. Answer their question about it in plain "
     "language, briefly (under 150 words). No markdown, but write any math as LaTeX "
     "between $ signs, e.g. $N'(t) = 13$. Copy formulas exactly as written on screen; if you "
     "can't read something clearly, say so instead of guessing. Always reply in the language "
@@ -35,6 +36,9 @@ SYSTEM = (
     "around the cursor instead."
 )
 ZOOM_W, ZOOM_H = 480, 320  # close-up size in screen points, centered on the cursor
+# tight crop of just the spot under the cursor: without it small models drift to whatever stands out
+# in the close-up (an icon "explained" as the colourful text beside it). Pixels on Windows/Linux.
+TIGHT = 64
 MAC = sys.platform == "darwin"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # Windows: no console flashing up from pythonw
 WIN = sys.platform == "win32"
@@ -267,9 +271,9 @@ def answer(history, question, imgs):
         yield f"Couldn't reach Ollama ({e}). Is it running? Try: ollama serve"
 
 
-def zoom_rect(mx, my, sx, sy, sw, sh):
-    """ZOOM_W x ZOOM_H box centered on the cursor, slid inside the screen at the edges."""
-    w, h = min(ZOOM_W, sw), min(ZOOM_H, sh)
+def zoom_rect(mx, my, sx, sy, sw, sh, w=ZOOM_W, h=ZOOM_H):
+    """w x h box centered on the cursor, slid inside the screen at the edges."""
+    w, h = min(w, sw), min(h, sh)
     x = min(max(mx - w / 2, sx), sx + sw - w)
     y = min(max(my - h / 2, sy), sy + sh - h)
     return x, y, w, h
@@ -292,9 +296,11 @@ def grab_mac(img, zoom):
     subprocess.run(["sips", "-Z", "1568", img], check=True, capture_output=True)
     if not rect:
         return [img], rect, at
-    subprocess.run(["screencapture", "-C", "-x", "-t", "jpg", "-R" + ",".join(f"{v:.0f}" for v in rect), zoom],
-                   check=True)
-    return [img, zoom], rect, at
+    tight = zoom.replace("zoom", "tight")
+    for r, path in ((rect, zoom), (zoom_rect(*at, sx, sy, sw, sh, TIGHT, TIGHT), tight)):
+        subprocess.run(["screencapture", "-C", "-x", "-t", "jpg", "-R" + ",".join(f"{v:.0f}" for v in r), path],
+                       check=True)
+    return [img, zoom, tight], rect, at
 
 
 def grab_other(img, zoom):
@@ -321,9 +327,11 @@ def grab_other(img, zoom):
             return [img], [], at
         shot = tkinter.PhotoImage(file=img)
         rect = zoom_rect(*at, 0, 0, shot.width(), shot.height())
-        x, y, w, h = map(round, rect)
-        shot.write(zoom, format="png", from_coords=(x, y, x + w, y + h))
-        return [img, zoom], rect, at
+        tight = zoom.replace("zoom", "tight")
+        for r, path in ((rect, zoom), (zoom_rect(*at, 0, 0, shot.width(), shot.height(), TIGHT, TIGHT), tight)):
+            x, y, w, h = map(round, r)
+            shot.write(path, format="png", from_coords=(x, y, x + w, y + h))
+        return [img, zoom, tight], rect, at
     finally:
         root.destroy()
 
@@ -345,7 +353,7 @@ def run(tmp):
     if not shot:
         return
     imgs, rect, at = shot
-    ocr = concurrent.futures.ThreadPoolExecutor(1).submit(read_text, imgs[-1])  # runs while the user types
+    ocr = concurrent.futures.ThreadPoolExecutor(1).submit(read_text, imgs[min(1, len(imgs) - 1)])  # runs while the user types
     print("ready", flush=True)  # screenshot taken: Hammerspoon can now show the question box
     converse(imgs, rect, ocr, *at)
 
@@ -392,6 +400,7 @@ if __name__ == "__main__":
     assert zoom_rect(500, 400, 0, 0, 1440, 900) == (260, 240, 480, 320)  # centered
     assert zoom_rect(5, 890, 0, 0, 1440, 900) == (0, 580, 480, 320)  # slid in at a corner
     assert zoom_rect(-800, 100, -1920, 0, 1920, 1080) == (-1040, 0, 480, 320)  # screen left of main
+    assert zoom_rect(10, 400, 0, 0, 1440, 900, TIGHT, TIGHT) == (0, 368, 64, 64)  # tight crop at the edge
     box = [["far", 0.0, 0.9, 0.1, 0.05], ["b) here", 0.41, 0.45, 0.13, 0.04]]  # Vision boxes, origin bottom left
     assert line_at(box, 0.5, 0.5) == "b) here" and line_at(box, 0.9, 0.1) == ""
     main()

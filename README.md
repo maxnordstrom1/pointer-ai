@@ -2,7 +2,7 @@
 
 Point at anything on your screen, press a hotkey, ask a question, and get a plain-language explanation in a popup.
 
-It takes a screenshot of the screen your mouse is on, plus a close-up centred on the cursor, so the AI knows exactly what you're pointing at. Leave the question box empty to just get "what is this?" It answers in the language you ask in, or, with no question, the language of the text you're pointing at.
+It takes a screenshot of the screen your mouse is on, plus a close-up centred on the cursor and a tight crop of just what's under it, so the AI knows exactly what you're pointing at. Leave the question box empty to just get "what is this?" It answers in the language you ask in, or, with no question, the language of the text you're pointing at.
 
 ## Requirements
 
@@ -68,7 +68,6 @@ Leave it running. **Win+Alt+A** asks, **Win+Alt+E** explains and holding **Win+A
 - **Linux** needs `python3-tk`, `xclip` (for copying) and a screenshot tool: `gnome-screenshot`, `spectacle` (KDE), `scrot` or ImageMagick's `import`; `grim` on Sway/Hyprland. Install `tesseract` too, so the model is told which text sits under the cursor.
 - **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/aimouse.py --ask` and `--explain` instead (no voice: desktop shortcuts can't tell when you let go). The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
 
-## Usage
 ## Usage
 
 Hover over something, then:
