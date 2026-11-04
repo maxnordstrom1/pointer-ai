@@ -295,12 +295,14 @@ local function aiMouse(explain, voice)
     args)
   task:start()
   if not voice then return end
+  -- without a streaming callback listen.py saw stdin closed at once and stopped recording, so stdout is collected there
+  local heard = ""
   local listen = hs.task.new(PYTHON, function(code, so)
-    local said = (so or ""):match("^%s*(.-)%s*$")
+    local said = (heard .. (so or "")):match("^%s*(.-)%s*$")
     if code == 0 and said ~= "" and task:isRunning() then return ask(said) end
     hide(); ended()  -- heard nothing, ask.py already quit, or an error (no mic permission, no whisper)
     if code ~= 0 and said ~= "" then showThread({ { a = said } }) end
-  end, { LISTEN })
+  end, function(_, so) heard = heard .. (so or ""); return true end, { LISTEN })
   listen:start()
   return function() listen:setInput("\n") end
 end
