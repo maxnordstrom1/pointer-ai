@@ -26,8 +26,8 @@ local F1, F2 = 2 * math.pi * 3 / (LOOP * SPEED), 2 * math.pi * 2 / (LOOP * SPEED
 
 local HIDPI = 2  -- frames are drawn at 2x so they stay sharp on Retina screens
 
-local function orbElements(t, dark)
-  local glow = { white = dark and 0 or 1, alpha = 0.35 }  -- keeps dots visible on any background
+-- Each dot: { depth, x, y, radius, ink, alpha }
+local function ringDots(t)
   local dots = {}
   local mid = (LANES - 1) / 2
   for w = 0, LANES - 1 do
@@ -40,42 +40,80 @@ local function orbElements(t, dark)
       local s = BASE_R * (1 + wob) / math.sqrt(x * x + y * y + z * z)
       x, y, z = x * s, y * s, z * s
       local depth = ((y * ST + z * CT) / R + 1) / 2
-      local ink = 0.52 - 0.44 * depth + 0.18 * edge
-      dots[#dots + 1] = { depth, {
-        type = "circle", action = "fill",
-        center = { x = (W / 2 + x) * HIDPI, y = (W / 2 - (y * CT - z * ST)) * HIDPI },
-        radius = math.max(0.3, (RBASE + RDEPTH * depth) * (1 - 0.25 * edge) * RS) * HIDPI,
-        fillColor = { white = dark and 1 - ink or ink, alpha = 0.4 + 0.6 * depth },
-        withShadow = true, shadow = { blurRadius = 0.6 * HIDPI, color = glow, offset = { h = 0, w = 0 } },
-      } }
+      dots[#dots + 1] = { depth, W / 2 + x, W / 2 - (y * CT - z * ST),
+        math.max(0.3, (RBASE + RDEPTH * depth) * (1 - 0.25 * edge) * RS), 0.52 - 0.44 * depth + 0.18 * edge, 0.4 + 0.6 * depth }
     end
   end
+  return dots
+end
+
+-- "Listening": a waveform rolls through the rings of a dotted sphere (thinking-orbs' wave mode, size-20 preset)
+local WAVE_R, RINGS, LON, WSPEED = ORB / 2 * 0.874, 5, 13, 3.998
+local WRBASE, WRDEPTH = 0.6 * 1.6, 1.7 * 1.6
+local WCT, WST = math.cos(0.38), math.sin(0.38)
+-- Loops after a 3/4 turn (its 8- and 12-dot rings look the same every quarter turn);
+-- the wave speeds (2.1, 1.27) are nudged to 9 and 5 cycles per loop
+local WLOOP = 1.5 * math.pi / 0.18
+local W1, W2 = 2 * math.pi * 9 / WLOOP, 2 * math.pi * 5 / WLOOP
+local function waveDots(t)
+  local dots = {}
+  local cy, sy = math.cos(t * 0.18), math.sin(t * 0.18)
+  for ri = 0, RINGS do
+    local lat = -math.pi / 2 + ri / RINGS * math.pi
+    local w = 0.62 * math.sin(t * W1 - ri * 0.52) + 0.38 * math.sin(t * W2 + ri * 0.83)
+    local rr, crest = WAVE_R * (0.88 + 0.105 * w), math.max(0, w)
+    local n = math.max(1, math.floor(math.abs(math.cos(lat)) * LON + 0.5))
+    for j = 0, n - 1 do
+      local lon = j / n * 2 * math.pi
+      local x, y, z = math.cos(lat) * math.cos(lon) * rr, math.sin(lat) * rr, math.cos(lat) * math.sin(lon) * rr
+      x, z = x * cy + z * sy, -x * sy + z * cy
+      local depth = ((y * WST + z * WCT) / WAVE_R + 1) / 2
+      dots[#dots + 1] = { depth, W / 2 + x, W / 2 - (y * WCT - z * WST),
+        math.max(0.3, (WRBASE + WRDEPTH * depth) * (1 + 0.4 * crest) * RS), 0.66 - 0.56 * depth - 0.1 * crest, 1 }
+    end
+  end
+  return dots
+end
+
+local function orbElements(dots, dark)
+  local glow = { white = dark and 0 or 1, alpha = 0.35 }  -- keeps dots visible on any background
   table.sort(dots, function(p, q) return p[1] < q[1] end)  -- far dots first
   local els = {}
-  for _, d in ipairs(dots) do els[#els + 1] = d[2] end
+  for _, d in ipairs(dots) do
+    els[#els + 1] = {
+      type = "circle", action = "fill",
+      center = { x = d[2] * HIDPI, y = d[3] * HIDPI }, radius = d[4] * HIDPI,
+      fillColor = { white = dark and 1 - d[5] or d[5], alpha = d[6] },
+      withShadow = true, shadow = { blurRadius = 0.6 * HIDPI, color = glow, offset = { h = 0, w = 0 } },
+    }
+  end
   return els
 end
 
+-- dots, t covered by one loop, frames in it
+local MODES = { thinking = { ringDots, LOOP * SPEED, FPS * LOOP },
+                listening = { waveDots, WLOOP, math.floor(FPS * WLOOP / WSPEED + 0.5) } }
 local cache = {}
-local function frames()
+local function frames(mode)
   local dark = hs.host.interfaceStyle() == "Dark"
-  local key = dark and "dark" or "light"
+  local key = mode .. (dark and "dark" or "light")
   if not cache[key] then
+    local dots, span, n = table.unpack(MODES[mode])
     local c = hs.canvas.new({ x = 0, y = 0, w = W * HIDPI, h = W * HIDPI })
     cache[key] = {}
-    for i = 0, FPS * LOOP - 1 do
-      c:replaceElements(orbElements(i / FPS * SPEED, dark))
+    for i = 0, n - 1 do
+      c:replaceElements(orbElements(dots(i / n * span), dark))
       cache[key][#cache[key] + 1] = c:imageFromCanvas()
     end
     c:delete()
   end
   return cache[key]
 end
-frames()  -- draw ahead of time so the first use starts instantly
+frames("thinking"); frames("listening")  -- draw ahead of time so the first use starts instantly
 
 -- Shows the orb just below-right of the cursor and follows it. Returns a function that removes it.
-local function spinner()
-  local imgs = frames()
+local function spinner(listening)
+  local imgs = frames(listening and "listening" or "thinking")
   local c = hs.canvas.new({ x = 0, y = 0, w = W, h = W })
   c:level("overlay")
   c:behavior({ "canJoinAllSpaces", "fullScreenAuxiliary" })  -- also show over full-screen apps
@@ -245,7 +283,7 @@ local function aiMouse(explain, voice, select)
     cur = { q = q, a = "" }
     task:setInput(q .. "\n")
     -- orb until the panel exists, but not before the screenshot, or it would be in it
-    if view then view("addQ(" .. js(q) .. ")") elseif not stop and ready then stop = spinner() end
+    if view then view("addQ(" .. js(q) .. ")") elseif ready then hide(); stop = spinner() end  -- thinking, not listening
   end
   local function got(text, finished)
     if not view then
@@ -274,7 +312,7 @@ local function aiMouse(explain, voice, select)
       out, err = out .. (so or ""), err .. (se or "")
       if not ready and out:find("^ready\n") then  -- screenshot taken, safe to draw on screen
         ready, out = true, out:sub(7)
-        if explain or voice then stop = stop or spinner() else  -- ponytail: same orb for listening and thinking
+        if explain or voice then stop = stop or spinner(voice and not cur) else  -- no question yet: still listening
           askQuestion(function(q) if q then ask(q) else task:terminate() end end)
         end
       end

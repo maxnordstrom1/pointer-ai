@@ -10,8 +10,45 @@ const dark = matchMedia("(prefers-color-scheme: dark)"), c = document.querySelec
 const g = c.getContext("2d"), k = devicePixelRatio || 1, start = performance.now()
 c.width = c.height = W * k
 g.scale(k, k)
+// "Listening" (aimouse.py sets it while Win+Alt+S is held): a waveform rolls through the rings of a
+// dotted sphere, thinking-orbs' wave mode at its size-20 preset
+let listening = false
+const WAVE_R = ORB / 2 * 0.874, RINGS = 5, LON = 13, WSPEED = 3.998, WRBASE = 0.6 * 1.6, WRDEPTH = 1.7 * 1.6
+const WCT = Math.cos(0.38), WST = Math.sin(0.38)
+function waveDots(t) {
+  const dots = [], cy = Math.cos(t * 0.18), sy = Math.sin(t * 0.18)
+  for (let ri = 0; ri <= RINGS; ri++) {
+    const lat = -Math.PI / 2 + ri / RINGS * Math.PI
+    const w = 0.62 * Math.sin(t * 2.1 - ri * 0.52) + 0.38 * Math.sin(t * 1.27 + ri * 0.83)
+    const rr = WAVE_R * (0.88 + 0.105 * w), crest = Math.max(0, w)
+    const n = Math.max(1, Math.round(Math.abs(Math.cos(lat)) * LON))
+    for (let j = 0; j < n; j++) {
+      const lon = j / n * 2 * Math.PI
+      let x = Math.cos(lat) * Math.cos(lon) * rr, y = Math.sin(lat) * rr, z = Math.cos(lat) * Math.sin(lon) * rr
+      ;[x, z] = [x * cy + z * sy, -x * sy + z * cy]
+      const depth = ((y * WST + z * WCT) / WAVE_R + 1) / 2
+      dots.push([depth, W / 2 + x, W / 2 - (y * WCT - z * WST),
+                 Math.max(0.3, (WRBASE + WRDEPTH * depth) * (1 + 0.4 * crest) * RS), 0.66 - 0.56 * depth - 0.1 * crest, 1])
+    }
+  }
+  return dots
+}
 function frame(now) {
-  const t = (now - start) / 1000 * SPEED, d = dark.matches, mid = (LANES - 1) / 2, dots = []
+  const d = dark.matches
+  const dots = listening ? waveDots((now - start) / 1000 * WSPEED) : ringDots((now - start) / 1000 * SPEED)
+  dots.sort((p, q) => p[0] - q[0])  // far dots first
+  g.clearRect(0, 0, W, W)
+  g.shadowBlur = 0.6 * k  // glow keeps the dots visible on any background
+  g.shadowColor = d ? "rgba(0,0,0,.35)" : "rgba(255,255,255,.35)"
+  for (const [, x, y, r, ink, alpha] of dots) {
+    const v = (d ? 1 - ink : ink) * 255
+    g.fillStyle = `rgba(${v},${v},${v},${alpha})`
+    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill()
+  }
+  requestAnimationFrame(frame)
+}
+function ringDots(t) {
+  const mid = (LANES - 1) / 2, dots = []
   for (let w = 0; w < LANES; w++) {
     const off = (w - mid) * 0.075, edge = Math.abs(w - mid) / mid
     for (let s = 0; s < SEGS; s++) {
@@ -22,18 +59,10 @@ function frame(now) {
       x *= m; y *= m; z *= m
       const depth = ((y * ST + z * CT) / R + 1) / 2, ink = 0.52 - 0.44 * depth + 0.18 * edge
       dots.push([depth, W / 2 + x, W / 2 - (y * CT - z * ST),
-                 Math.max(0.3, (RBASE + RDEPTH * depth) * (1 - 0.25 * edge) * RS), (d ? 1 - ink : ink) * 255, 0.4 + 0.6 * depth])
+                 Math.max(0.3, (RBASE + RDEPTH * depth) * (1 - 0.25 * edge) * RS), ink, 0.4 + 0.6 * depth])
     }
   }
-  dots.sort((p, q) => p[0] - q[0])  // far dots first
-  g.clearRect(0, 0, W, W)
-  g.shadowBlur = 0.6 * k  // glow keeps the dots visible on any background
-  g.shadowColor = d ? "rgba(0,0,0,.35)" : "rgba(255,255,255,.35)"
-  for (const [, x, y, r, v, alpha] of dots) {
-    g.fillStyle = `rgba(${v},${v},${v},${alpha})`
-    g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill()
-  }
-  requestAnimationFrame(frame)
+  return dots
 }
 requestAnimationFrame(frame)
 </script>

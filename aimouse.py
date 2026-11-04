@@ -153,8 +153,10 @@ def close_panel(only=None):
         p.on_close()
 
 
-def spinner(on):
+def spinner(on, listening=False):
     global orb_on
+    if on:
+        orb.evaluate_js(f"listening = {'true' if listening else 'false'}")
     if on and not WAYLAND:
         (x, y), _ = cursor()
         orb.move(int(x + 14), int(y + 14))
@@ -277,7 +279,7 @@ def ai_mouse(explain, done=None, voice=False):
                 cur = {"q": DEFAULT, "a": ""}
                 spinner(True)
             elif voice:
-                spinner(True)  # ponytail: same orb for listening and thinking
+                spinner(True, listening=cur is None)  # no question yet: still listening
             else:
                 sent = False
 
