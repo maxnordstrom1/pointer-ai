@@ -1,10 +1,11 @@
 -- AI Mouse: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it, hold ⌥⌘S to speak it
 local PYTHON = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
-local SCRIPT = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/ask.py"
+local DIR = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/"
+local SCRIPT = DIR .. "ask.py"
 local LISTEN = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/listen.py"
 
 -- Reload Hammerspoon when this file changes, so edits take effect without a manual reload
-AIMouseWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/Desktop/AI_mouse_agent/", function(paths)
+AIMouseWatcher = hs.pathwatcher.new(DIR, function(paths)
   for _, p in ipairs(paths) do if p:match("%.lua$") then hs.reload(); return end end
 end):start()  -- global so it isn't garbage-collected
 
@@ -102,19 +103,13 @@ local function besideCursor(p, w, h)
   return { x = x, y = y, w = w, h = h }
 end
 
--- Soft monochrome look to match the orb; follows the system light/dark setting like the orb does
-local STYLE = [[<!doctype html><meta charset="utf-8"><style>
-:root { color-scheme: light dark; --bg: rgba(250,250,250,.97); --ink: rgba(0,0,0,.74); --dim: rgba(0,0,0,.35); --edge: rgba(0,0,0,.08) }
-@media (prefers-color-scheme: dark) { :root { --bg: rgba(24,24,26,.97); --ink: rgba(255,255,255,.80); --dim: rgba(255,255,255,.38); --edge: rgba(255,255,255,.10) } }
-html, body { margin: 0; height: 100%; background: transparent; overflow: hidden }
-.box { box-sizing: border-box; height: 100%; border-radius: 14px; background: var(--bg); color: var(--ink);
-       box-shadow: inset 0 0 0 .5px var(--edge); font: 12.5px/1.5 -apple-system, sans-serif;
-       animation: in .35s cubic-bezier(.2,.8,.2,1) }
-@keyframes in { from { opacity: 0; transform: scale(.94) } }
-@keyframes breathe { 50% { opacity: .25; transform: scale(.7) } }
-::-webkit-scrollbar { width: 6px } ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px }
-::placeholder { color: var(--dim) }
-</style><script>const post = m => webkit.messageHandlers.aimouse.postMessage(m)</script>]]
+-- Panel pages live in ui/ (shared with aimouse.py on Windows and Linux)
+local function ui(name)
+  local f = assert(io.open(DIR .. "ui/" .. name .. ".html"))
+  local s = f:read("a")
+  f:close()
+  return s
+end
 
 local panel, follow, escKey, scrollTap, onClose
 local function closePanel()
@@ -142,7 +137,7 @@ local function openPanel(html, w, h, onMsg, closed)
     :shadow(true)
     :level(hs.drawing.windowLevels.floating)
     :behaviorAsLabels({ "canJoinAllSpaces", "fullScreenAuxiliary" })  -- also over full-screen apps
-    :html(STYLE .. html)
+    :html(ui("style") .. html)
     :show()
   panel:hswindow():focus()
   onClose = closed
@@ -183,69 +178,9 @@ local function showThread(thread, onAsk, closed)
     parts[#parts + 1] = "<p>" .. htmlEscape(t.a) .. "</p>"
   end
   local loaded, queued = false, {}
-  openPanel([[<style>
-.box { display: flex; flex-direction: column }
-#b { flex: 1; overflow: auto; padding: 0 14px; white-space: pre-wrap; cursor: text }
-p { margin: 10px 0 } .q { color: var(--dim) }
-.ask { flex: none; height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 14px;
-       box-shadow: inset 0 .5px 0 var(--edge) }
-i { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--dim);
-    animation: breathe 2.4s ease-in-out infinite }
-input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
-input:disabled { opacity: .4 }
-.katex { font-size: 1.1em }
-</style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="mathAll()"></script>
-<div class="box"><div id="b">]] .. table.concat(parts) .. [[</div>]] ..
-    (onAsk and [[<div class="ask"><i></i><input id="q" placeholder="Follow up…"></div>]] or "") .. [[</div><script>
-// Grow to fit (max 360px). Stick to the newest text unless the user has scrolled up.
-let stick = true
-b.addEventListener("scroll", () => { stick = b.scrollHeight - b.scrollTop - b.clientHeight < 30 })
-const fit = () => { post({ h: b.scrollHeight + (window.q ? 34 : 0) }); if (stick) b.scrollTop = b.scrollHeight }
-// Render $…$ math with KaTeX. Offline, the script fails to load and the raw text stays.
-const OPTS = { throwOnError: false, delimiters: [
-  { left: "$$", right: "$$", display: true }, { left: "\\[", right: "\\]", display: true },
-  { left: "$", right: "$", display: false }, { left: "\\(", right: "\\)", display: false } ] }
-const math = el => { if (window.renderMathInElement) renderMathInElement(el, OPTS) }
-function mathAll() { b.querySelectorAll("p").forEach(p => p !== cur && math(p)); fit() }
-
-// Typewriter: text from the model queues up and is typed out, faster when the model gets ahead
-let cur = null, queue = "", ending = false
-function addQ(text) {
-  const p = document.createElement("p"); p.className = "q"; p.textContent = text; b.append(p)
-  cur = document.createElement("p"); cur.innerHTML = "<i></i>"; b.append(cur)  // breathing dot until text arrives
-  queue = ""; ending = false; stick = true
-  if (window.q) q.disabled = true
-  fit()
-}
-function addText(s) { queue += s }
-function finish() { ending = true }
-setInterval(() => {
-  if (!cur) return
-  if (queue) {
-    if (cur.querySelector("i")) { queue = queue.trimStart(); if (!queue) return; cur.textContent = "" }
-    const n = Math.max(1, Math.ceil(queue.length / 30))
-    cur.textContent += queue.slice(0, n); queue = queue.slice(n); fit()
-  } else if (ending) {
-    cur.textContent = cur.textContent.trim() || "(no answer)"
-    math(cur); cur = null
-    if (window.q) { q.disabled = false; q.focus() }
-    fit()
-  }
-}, 16)
-
-if (window.q) { q.focus(); q.addEventListener("keydown", e => {
-  if (e.key === "Enter" && q.value.trim() && !q.disabled) { post({ q: q.value }); q.value = "" } }) }
-addEventListener("keydown", e => {
-  if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); b.scrollBy(0, e.key === "ArrowUp" ? -40 : 40) }
-  if (e.metaKey && e.key === "c") post({ copy: String(getSelection()) })
-  if (e.metaKey && e.key === "a" && document.activeElement !== window.q) { e.preventDefault(); getSelection().selectAllChildren(b) }
-})
-fit()
-post({ ready: true })
-</script>]], 340, 40,
+  local html = ui("thread"):gsub("{{THREAD}}", function() return table.concat(parts) end)
+  if not onAsk then html = html:gsub("<!%-%-ask%-%->.-<!%-%-/ask%-%->", "") end
+  openPanel(html, 340, 40,
     function(m)
       if m.ready then
         loaded = true
@@ -285,16 +220,9 @@ end
 -- Question box by the cursor. Calls done(question), or done(nil) on Esc.
 local function askQuestion(done)
   local sent = false
-  openPanel([[<style>
-.box { display: flex; align-items: center; gap: 9px; padding: 0 14px }
-i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); animation: breathe 2.4s ease-in-out infinite }
-input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
-</style><div class="box"><i></i><input id="q" placeholder="Ask about this… or just press ↵" autofocus></div><script>
-q.focus()
-q.addEventListener("keydown", e => { if (e.key === "Enter") post({ q: q.value }) })
-</script>]], 300, 38,
+  openPanel(ui("ask"), 300, 38,
     function(m)
-      if sent then return end
+      if sent or not m.q then return end
       sent = true
       hs.timer.doAfter(0, function()  -- not from inside the panel's own callback
         closePanel()
@@ -307,7 +235,7 @@ end
 -- One conversation per hotkey press: same screenshot, follow-ups until Esc. ask.py streams each answer
 -- in pieces and ends it with \30 (END). With voice, the first question is spoken instead of typed:
 -- listen.py records until the returned function is called (hotkey let go), then it's asked.
-local function aiMouse(explain, voice)
+local function aiMouse(explain, voice, select)
   closePanel()
   local out, err, ready, stop, task, view = "", "", false, nil, nil, nil
   local thread, cur = {}, explain and { q = "Explain what I'm pointing at.", a = "" } or nil
@@ -335,6 +263,7 @@ local function aiMouse(explain, voice)
   local p, f = hs.mouse.absolutePosition(), hs.mouse.getCurrentScreen():fullFrame()
   local args = { SCRIPT, "--at", ("%.0f,%.0f"):format(p.x, p.y), "--screen", ("%.0f,%.0f,%.0f,%.0f"):format(f.x, f.y, f.w, f.h) }
   if explain then args[#args + 1] = "--explain" end
+  if select then args[#args + 1] = "--select" end
   task = hs.task.new(PYTHON, function(code)
       hide()
       local msg = not ready and out:match("^%s*(.-)%s*$") or ""  -- e.g. the no-permission message
@@ -367,18 +296,27 @@ local function aiMouse(explain, voice)
     args)
   task:start()
   if not voice then return end
+  -- without a streaming callback listen.py saw stdin closed at once and stopped recording, so stdout is collected there
+  local heard = ""
   local listen = hs.task.new(PYTHON, function(code, so)
-    local said = (so or ""):match("^%s*(.-)%s*$")
+    local said = (heard .. (so or "")):match("^%s*(.-)%s*$")
     if code == 0 and said ~= "" and task:isRunning() then return ask(said) end
     hide(); ended()  -- heard nothing, ask.py already quit, or an error (no mic permission, no whisper)
     if code ~= 0 and said ~= "" then showThread({ { a = said } }) end
-  end, { LISTEN })
+  end, function(_, so) heard = heard .. (so or ""); return true end, { LISTEN })
   listen:start()
   return function() listen:setInput("\n") end
 end
 
 hs.hotkey.bind({ "alt", "cmd" }, "A", function() aiMouse(false) end)
 hs.hotkey.bind({ "alt", "cmd" }, "E", function() aiMouse(true) end)
+-- Drag over an area (like ⇧⌘4), then ask about it; leave the question empty to get it explained
+-- waits for ⌥⌘ to be let go: in the crosshair, a held ⌥ grows the selection from its center
+local selectWait  -- kept so the timer isn't garbage collected while it waits
+hs.hotkey.bind({ "alt", "cmd" }, "D", function()
+  selectWait = hs.timer.waitUntil(function() local m = hs.eventtap.checkKeyboardModifiers(); return not (m.alt or m.cmd) end,
+    function() aiMouse(false, false, true) end, 0.02)
+end)
 -- Hold ⌥⌘S and speak your question; let go to send it
 local stopListening
 hs.hotkey.bind({ "alt", "cmd" }, "S",

@@ -1,0 +1,5 @@
+# Windows and Linux only: macOS needs nothing extra (Hammerspoon draws the UI there)
+pywebview; sys_platform == "win32"
+pywebview[qt]; sys_platform == "linux"
+pynput
+lingua-language-detector

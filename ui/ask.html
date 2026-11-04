@@ -1,0 +1,8 @@
+<style>
+.box { display: flex; align-items: center; gap: 9px; padding: 0 14px }
+i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); animation: breathe 2.4s ease-in-out infinite }
+input { flex: 1; border: 0; outline: 0; background: none; color: inherit; font: inherit }
+</style><div class="box"><i></i><input id="q" placeholder="Ask about this… or just press ↵" autofocus></div><script>
+q.focus()
+q.addEventListener("keydown", e => { if (e.key === "Enter") post({ q: q.value }) })
+</script>

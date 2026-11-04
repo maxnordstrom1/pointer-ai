@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><style>
+:root { color-scheme: light dark; --bg: rgba(250,250,250,.97); --ink: rgba(0,0,0,.74); --dim: rgba(0,0,0,.35); --edge: rgba(0,0,0,.08) }
+@media (prefers-color-scheme: dark) { :root { --bg: rgba(24,24,26,.97); --ink: rgba(255,255,255,.80); --dim: rgba(255,255,255,.38); --edge: rgba(255,255,255,.10) } }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden }
+.box { box-sizing: border-box; height: 100%; border-radius: 14px; background: var(--bg); color: var(--ink);
+       box-shadow: inset 0 0 0 .5px var(--edge); font: 12.5px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif;
+       animation: in .35s cubic-bezier(.2,.8,.2,1) }
+@keyframes in { from { opacity: 0; transform: scale(.94) } }
+@keyframes breathe { 50% { opacity: .25; transform: scale(.7) } }
+::-webkit-scrollbar { width: 6px } ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px }
+::placeholder { color: var(--dim) }
+</style><script>
+// Messages to the host: Hammerspoon on macOS, aimouse.py (pywebview) on Windows and Linux
+const post = m => window.webkit?.messageHandlers?.aimouse ? webkit.messageHandlers.aimouse.postMessage(m)
+  : window.pywebview?.api ? pywebview.api.post(m)
+  : addEventListener("pywebviewready", () => pywebview.api.post(m), { once: true })
+addEventListener("keydown", e => { if (e.key === "Escape") post({ close: true }) })  // macOS catches Esc first
+</script>
