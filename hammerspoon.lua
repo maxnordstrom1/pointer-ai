@@ -235,7 +235,7 @@ end
 -- One conversation per hotkey press: same screenshot, follow-ups until Esc. ask.py streams each answer
 -- in pieces and ends it with \30 (END). With voice, the first question is spoken instead of typed:
 -- listen.py records until the returned function is called (hotkey let go), then it's asked.
-local function aiMouse(explain, voice)
+local function aiMouse(explain, voice, select)
   closePanel()
   local out, err, ready, stop, task, view = "", "", false, nil, nil, nil
   local thread, cur = {}, explain and { q = "Explain what I'm pointing at.", a = "" } or nil
@@ -263,6 +263,7 @@ local function aiMouse(explain, voice)
   local p, f = hs.mouse.absolutePosition(), hs.mouse.getCurrentScreen():fullFrame()
   local args = { SCRIPT, "--at", ("%.0f,%.0f"):format(p.x, p.y), "--screen", ("%.0f,%.0f,%.0f,%.0f"):format(f.x, f.y, f.w, f.h) }
   if explain then args[#args + 1] = "--explain" end
+  if select then args[#args + 1] = "--select" end
   task = hs.task.new(PYTHON, function(code)
       hide()
       local msg = not ready and out:match("^%s*(.-)%s*$") or ""  -- e.g. the no-permission message
@@ -309,6 +310,13 @@ end
 
 hs.hotkey.bind({ "alt", "cmd" }, "A", function() aiMouse(false) end)
 hs.hotkey.bind({ "alt", "cmd" }, "E", function() aiMouse(true) end)
+-- Drag over an area (like ⇧⌘4), then ask about it; leave the question empty to get it explained
+-- waits for ⌥⌘ to be let go: in the crosshair, a held ⌥ grows the selection from its center
+local selectWait  -- kept so the timer isn't garbage collected while it waits
+hs.hotkey.bind({ "alt", "cmd" }, "D", function()
+  selectWait = hs.timer.waitUntil(function() local m = hs.eventtap.checkKeyboardModifiers(); return not (m.alt or m.cmd) end,
+    function() aiMouse(false, false, true) end, 0.02)
+end)
 -- Hold ⌥⌘S and speak your question; let go to send it
 local stopListening
 hs.hotkey.bind({ "alt", "cmd" }, "S",

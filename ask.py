@@ -1,7 +1,8 @@
 """Point the mouse at something, run this, ask a question, get an explanation.
 
 Screenshot includes the cursor, so the model sees what you're pointing at. Hammerspoon passes
---at X,Y --screen X,Y,W,H, which adds a close-up around the cursor and captures the right display.
+--at X,Y --screen X,Y,W,H, which adds a close-up around the cursor and captures the right display,
+or --select to let the user drag over an area instead (macOS only).
 BACKEND "local" runs via Ollama; "claude" runs via Claude Code on your subscription.
 On Windows and Linux, aimouse.py runs this instead, and it grabs the screen and cursor position itself.
 """
@@ -22,12 +23,16 @@ MODEL = "gemma4"  # any Ollama model with "vision" in `ollama show <model>`
 OLLAMA = "http://localhost:11434/api/chat"
 # Shortcuts runs with a bare PATH, so fall back to the default install location
 CLAUDE = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
+SELECT = "--select" in sys.argv  # ⌥⌘D: the user drags over an area instead of pointing
 SYSTEM = (
-    "You are a helpful assistant. The first image is the user's screen. If there is a "
-    "second image, it is a close-up centered exactly on the mouse cursor: the user is "
-    "pointing at whatever is under the cursor at the center of that close-up, so trust it "
-    "over the full screen, which is only context. If there is a third image, it is a tight "
-    "crop of exactly what is under the cursor: that is what they mean. Answer their question about it in plain "
+    "You are a helpful assistant. " + (
+        "The image is the area of the screen the user selected: that is what they mean. " if SELECT else
+        "The first image is the user's screen. If there is a "
+        "second image, it is a close-up centered exactly on the mouse cursor: the user is "
+        "pointing at whatever is under the cursor at the center of that close-up, so trust it "
+        "over the full screen, which is only context. If there is a third image, it is a tight "
+        "crop of exactly what is under the cursor: that is what they mean. ") +
+    "Answer their question about it in plain "
     "language, briefly (under 150 words). No markdown, but write any math as LaTeX "
     "between $ signs, e.g. $N'(t) = 13$. Copy formulas exactly as written on screen; if you "
     "can't read something clearly, say so instead of guessing. Always reply in the language "
@@ -282,6 +287,12 @@ def zoom_rect(mx, my, sx, sy, sw, sh, w=ZOOM_W, h=ZOOM_H):
 def grab_mac(img, zoom):
     """Screenshot (+ close-up when Hammerspoon passes the cursor). Returns (images, close-up rect, cursor)."""
     screen, rect, at = [], [], (0, 0)
+    if SELECT:  # same crosshair as ⇧⌘4; Esc cancels and leaves no file
+        subprocess.run(["screencapture", "-i", "-x", "-t", "jpg", img])
+        if not os.path.exists(img):
+            return None
+        subprocess.run(["sips", "-Z", "1568", img], check=True, capture_output=True)
+        return [img], rect, at
     if "--at" in sys.argv and "--screen" in sys.argv:
         at = tuple(map(float, sys.argv[sys.argv.index("--at") + 1].split(",")))
         sx, sy, sw, sh = map(float, sys.argv[sys.argv.index("--screen") + 1].split(","))
