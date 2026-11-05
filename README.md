@@ -1,4 +1,4 @@
-# AI Mouse
+# Pointer AI
 
 Point at anything on your screen, press a hotkey, ask a question, and get a plain-language explanation in a popup.
 

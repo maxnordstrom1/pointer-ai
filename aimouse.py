@@ -1,4 +1,4 @@
-"""AI Mouse for Windows and Linux: the same hotkeys, orb and cursor-following panel as hammerspoon.lua on macOS.
+"""Pointer AI for Windows and Linux: the same hotkeys, orb and cursor-following panel as hammerspoon.lua on macOS.
 
     python aimouse.py            stays in the background: Win+Alt+A asks, Win+Alt+E just explains,
                                  hold Win+Alt+S and speak to ask out loud (listen.py)
@@ -97,7 +97,7 @@ class Panel:
         self.shown_h = h
         panel = self
         self.win = webview.create_window(
-            "AI Mouse", html=ui("style") + page, js_api=Api(self.got), width=w, height=h, x=self.x, y=self.y,
+            "Pointer AI", html=ui("style") + page, js_api=Api(self.got), width=w, height=h, x=self.x, y=self.y,
             frameless=True, easy_drag=False, on_top=True, transparent=True, resizable=False, text_select=True,
             min_size=(1, 1))
         self.win.events.closed += lambda: close_panel(self)  # e.g. Alt+F4
@@ -172,7 +172,7 @@ def take_focus():
         u = ctypes.windll.user32
         u.keybd_event(0x12, 0, 0, 0)
         u.keybd_event(0x12, 0, 2, 0)
-        u.SetForegroundWindow(u.FindWindowW(None, "AI Mouse"))
+        u.SetForegroundWindow(u.FindWindowW(None, "Pointer AI"))
 
 
 def follow():
@@ -303,7 +303,7 @@ def ai_mouse(explain, done=None, voice=False):
     spinner(False)
     msg = "" if ready else out.strip()  # e.g. no screenshot tool
     if not msg and proc.wait() != 0:
-        msg = "AI Mouse crashed:\n" + proc.stderr.read().decode("utf-8", "replace")
+        msg = "Pointer AI crashed:\n" + proc.stderr.read().decode("utf-8", "replace")
     if msg:
         if view:
             view.on_close = None  # replaced, not closed: don't end the app yet
@@ -367,7 +367,7 @@ def main():
         sys.exit("Wayland doesn't allow global hotkeys. Bind desktop shortcuts to "
                  f"'{sys.executable} {__file__} --ask' and '... --explain' instead.")
     # The orb is also the always-there window pywebview needs to keep running
-    orb = webview.create_window("AI Mouse orb", html=ui("orb"), width=26, height=26, hidden=True, frameless=True,
+    orb = webview.create_window("Pointer AI orb", html=ui("orb"), width=26, height=26, hidden=True, frameless=True,
                                 easy_drag=False, on_top=True, transparent=True, focus=False, resizable=False,
                                 min_size=(1, 1))
 

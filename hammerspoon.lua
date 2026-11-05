@@ -1,4 +1,4 @@
--- AI Mouse: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it, hold ⌥⌘S to speak it
+-- Pointer AI: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it, hold ⌥⌘S to speak it
 local PYTHON = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
 local DIR = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/"
 local SCRIPT = DIR .. "ask.py"
@@ -305,7 +305,7 @@ local function aiMouse(explain, voice, select)
   task = hs.task.new(PYTHON, function(code)
       hide()
       local msg = not ready and out:match("^%s*(.-)%s*$") or ""  -- e.g. the no-permission message
-      if msg == "" and code ~= 0 and code ~= 15 then msg = "AI Mouse crashed:\n" .. err end  -- 15: we ended it
+      if msg == "" and code ~= 0 and code ~= 15 then msg = "Pointer AI crashed:\n" .. err end  -- 15: we ended it
       if msg ~= "" then showThread({ { a = msg } }) end
     end,
     function(_, so, se)
