@@ -1,7 +1,7 @@
 <!doctype html><meta charset="utf-8">
 <style>html, body { margin: 0; background: transparent; overflow: hidden } canvas { width: 26px; height: 26px }</style>
 <canvas></canvas><script>
-// "Breathing" orb for aimouse.py, the same drawing as orbElements in hammerspoon.lua. Ported from
+// "Breathing" orb for pointer.py, the same drawing as orbElements in hammerspoon.lua. Ported from
 // thinking-orbs by Jakub Antalik (MIT): https://github.com/Jakubantalik/thinking-orbs (ring mode, size 20)
 const ORB = 20, W = ORB + 6, LANES = 8, SEGS = 15, WOB = 0.565, SPEED = 3.78, RBASE = 1.7842, RDEPTH = 2.7574
 const RS = (ORB / 300) ** 0.6, R = ORB / 2 * 0.78, BASE_R = R / (1 + 0.85 * 0.23 * WOB)
@@ -10,7 +10,7 @@ const dark = matchMedia("(prefers-color-scheme: dark)"), c = document.querySelec
 const g = c.getContext("2d"), k = devicePixelRatio || 1, start = performance.now()
 c.width = c.height = W * k
 g.scale(k, k)
-// "Listening" (aimouse.py sets it while Win+Alt+S is held): a waveform rolls through the rings of a
+// "Listening" (pointer.py sets it while Win+Alt+S is held): a waveform rolls through the rings of a
 // dotted sphere, thinking-orbs' wave mode at its size-20 preset
 let listening = false
 const WAVE_R = ORB / 2 * 0.874, RINGS = 5, LON = 13, WSPEED = 3.998, WRBASE = 0.6 * 1.6, WRDEPTH = 1.7 * 1.6

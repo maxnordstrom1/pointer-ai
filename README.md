@@ -32,7 +32,7 @@ No extra Python packages are needed.
 2. **Try it from Terminal:**
 
    ```sh
-   python3 ~/Desktop/AI_mouse_agent/ask.py
+   python3 ~/Desktop/pointer-ai/ask.py
    ```
 
    Type your question and press Return (empty = just explain). The answer prints in Terminal.
@@ -48,25 +48,25 @@ No extra Python packages are needed.
    Put this line in `~/.hammerspoon/init.lua`, then open Hammerspoon:
 
    ```lua
-   dofile(os.getenv("HOME") .. "/Desktop/AI_mouse_agent/hammerspoon.lua")
+   dofile(os.getenv("HOME") .. "/Desktop/pointer-ai/hammerspoon.lua")
    ```
 
    (If your Python or this folder is somewhere else, update `PYTHON` and `SCRIPT` at the top of `hammerspoon.lua`.) Hammerspoon reloads by itself whenever `hammerspoon.lua` changes. Give Hammerspoon **Accessibility** and **Screen Recording** permission, and turn on "Launch Hammerspoon at login" in its settings.
 
 ## Windows and Linux
 
-`aimouse.py` does what Hammerspoon does on the Mac: the same hotkeys, orb, cursor-following panel, math, follow-ups and copy. Choose the mode in `ask.py` as in step 1 above, then:
+`pointer.py` does what Hammerspoon does on the Mac: the same hotkeys, orb, cursor-following panel, math, follow-ups and copy. Choose the mode in `ask.py` as in step 1 above, then:
 
 ```sh
 pip install -r requirements.txt
-python aimouse.py
+python pointer.py
 ```
 
-Leave it running. **Win+Alt+A** asks, **Win+Alt+E** explains and holding **Win+Alt+S** lets you speak (Super+Alt on Linux; voice needs the setup under [Voice](#voice)); Ctrl+C copies and Alt parks the panel. To start it at login, put a shortcut to `pythonw C:\path\to\aimouse.py` in the folder that `shell:startup` opens (Windows), or add it to your desktop's startup apps (Linux).
+Leave it running. **Win+Alt+A** asks, **Win+Alt+E** explains and holding **Win+Alt+S** lets you speak (Super+Alt on Linux; voice needs the setup under [Voice](#voice)); Ctrl+C copies and Alt parks the panel. To start it at login, put a shortcut to `pythonw C:\path\to\pointer.py` in the folder that `shell:startup` opens (Windows), or add it to your desktop's startup apps (Linux).
 
 - **Windows** needs nothing else. Text recognition and screenshots use what's built into Windows.
 - **Linux** needs `python3-tk`, `xclip` (for copying) and a screenshot tool: `gnome-screenshot`, `spectacle` (KDE), `scrot` or ImageMagick's `import`; `grim` on Sway/Hyprland. Install `tesseract` too, so the model is told which text sits under the cursor.
-- **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/aimouse.py --ask` and `--explain` instead (no voice: desktop shortcuts can't tell when you let go). The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
+- **Linux on Wayland** (the default on Ubuntu and Fedora) doesn't let apps see the cursor or grab global hotkeys. Bind your desktop's own shortcuts to `python3 /path/to/pointer.py --ask` and `--explain` instead (no voice: desktop shortcuts can't tell when you let go). The panel then opens where the desktop puts it and stays there, and there's no close-up. For the full experience, log in to an X11 ("Xorg") session.
 
 ## Usage
 
@@ -85,9 +85,9 @@ Hold ⌥⌘S (Win+Alt+S on Windows and Linux), say your question, and let go. `l
 
 ```sh
 brew install ffmpeg whisper-cpp
-mkdir -p ~/Desktop/AI_mouse_agent/models
-curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-curl -L -o ~/Desktop/AI_mouse_agent/models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+mkdir -p ~/Desktop/pointer-ai/models
+curl -L -o ~/Desktop/pointer-ai/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+curl -L -o ~/Desktop/pointer-ai/models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
 ```
 
 The first time, macOS asks to let Hammerspoon use the microphone. On Windows and Linux, install ffmpeg and whisper.cpp (`whisper-cli` on your PATH) and download the same two files into `models/`. Windows records from the first microphone ffmpeg lists; Linux from the default PulseAudio/PipeWire input. For faster but less accurate recognition, download `ggml-base.bin` instead and change `MODEL` in `listen.py`.

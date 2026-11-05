@@ -4,7 +4,7 @@ Screenshot includes the cursor, so the model sees what you're pointing at. Hamme
 --at X,Y --screen X,Y,W,H, which adds a close-up around the cursor and captures the right display,
 or --select to let the user drag over an area instead (macOS only).
 BACKEND "local" runs via Ollama; "claude" runs via Claude Code on your subscription.
-On Windows and Linux, aimouse.py runs this instead, and it grabs the screen and cursor position itself.
+On Windows and Linux, pointer.py runs this instead, and it grabs the screen and cursor position itself.
 """
 import base64
 import concurrent.futures
@@ -350,7 +350,7 @@ def main():
     for f in (sys.stdin, sys.stdout):
         f.reconfigure(encoding="utf-8")  # Windows pipes default to a legacy code page
     signal.signal(signal.SIGTERM, lambda *_: sys.exit())  # closing the panel: clean up below
-    tmp = tempfile.mkdtemp(prefix="ai_mouse_")  # private (0700): screenshots stay yours
+    tmp = tempfile.mkdtemp(prefix="pointer_ai_")  # private (0700): screenshots stay yours
     try:
         run(tmp)
     finally:
@@ -359,7 +359,7 @@ def main():
 
 def run(tmp):
     ext = "jpg" if MAC else "png"
-    img, zoom = os.path.join(tmp, "ai_mouse." + ext), os.path.join(tmp, "ai_mouse_zoom." + ext)
+    img, zoom = os.path.join(tmp, "pointer_ai." + ext), os.path.join(tmp, "pointer_ai_zoom." + ext)
     shot = (grab_mac if MAC else grab_other)(img, zoom)
     if not shot:
         return

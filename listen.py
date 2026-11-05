@@ -40,7 +40,7 @@ def main():
         print(f"Voice needs a Whisper model at {MODEL}. Download ggml-small.bin from "
               "https://huggingface.co/ggerganov/whisper.cpp/tree/main", flush=True)
         return 1
-    with tempfile.TemporaryDirectory(prefix="ai_mouse_") as tmp:  # private (0700) and removed afterwards
+    with tempfile.TemporaryDirectory(prefix="pointer_ai_") as tmp:  # private (0700) and removed afterwards
         return listen(os.path.join(tmp, "voice.wav"))
 
 

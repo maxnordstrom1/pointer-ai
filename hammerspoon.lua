@@ -1,11 +1,11 @@
 -- Pointer AI: ⌥⌘A asks a question about what you're pointing at, ⌥⌘E just explains it, hold ⌥⌘S to speak it
 local PYTHON = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
-local DIR = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/"
+local DIR = os.getenv("HOME") .. "/Desktop/pointer-ai/"
 local SCRIPT = DIR .. "ask.py"
-local LISTEN = os.getenv("HOME") .. "/Desktop/AI_mouse_agent/listen.py"
+local LISTEN = DIR .. "listen.py"
 
 -- Reload Hammerspoon when this file changes, so edits take effect without a manual reload
-AIMouseWatcher = hs.pathwatcher.new(DIR, function(paths)
+PointerAIWatcher = hs.pathwatcher.new(DIR, function(paths)
   for _, p in ipairs(paths) do if p:match("%.lua$") then hs.reload(); return end end
 end):start()  -- global so it isn't garbage-collected
 
@@ -141,7 +141,7 @@ local function besideCursor(p, w, h)
   return { x = x, y = y, w = w, h = h }
 end
 
--- Panel pages live in ui/ (shared with aimouse.py on Windows and Linux)
+-- Panel pages live in ui/ (shared with pointer.py on Windows and Linux)
 local function ui(name)
   local f = assert(io.open(DIR .. "ui/" .. name .. ".html"))
   local s = f:read("a")
@@ -163,7 +163,7 @@ end
 local function openPanel(html, w, h, onMsg, closed)
   closePanel()
   local size = { w = w, h = h }
-  local uc = hs.webview.usercontent.new("aimouse")
+  local uc = hs.webview.usercontent.new("pointerai")
   uc:setCallback(function(msg)
     if msg.body.h then size.h, size.overflow = math.min(msg.body.h, 360), msg.body.h > 360
     else onMsg(msg.body) end
@@ -273,7 +273,7 @@ end
 -- One conversation per hotkey press: same screenshot, follow-ups until Esc. ask.py streams each answer
 -- in pieces and ends it with \30 (END). With voice, the first question is spoken instead of typed:
 -- listen.py records until the returned function is called (hotkey let go), then it's asked.
-local function aiMouse(explain, voice, select)
+local function pointerAI(explain, voice, select)
   closePanel()
   local out, err, ready, stop, task, view = "", "", false, nil, nil, nil
   local thread, cur = {}, explain and { q = "Explain what I'm pointing at.", a = "" } or nil
@@ -346,17 +346,17 @@ local function aiMouse(explain, voice, select)
   return function() listen:setInput("\n") end
 end
 
-hs.hotkey.bind({ "alt", "cmd" }, "A", function() aiMouse(false) end)
-hs.hotkey.bind({ "alt", "cmd" }, "E", function() aiMouse(true) end)
+hs.hotkey.bind({ "alt", "cmd" }, "A", function() pointerAI(false) end)
+hs.hotkey.bind({ "alt", "cmd" }, "E", function() pointerAI(true) end)
 -- Drag over an area (like ⇧⌘4), then ask about it; leave the question empty to get it explained
 -- waits for ⌥⌘ to be let go: in the crosshair, a held ⌥ grows the selection from its center
 local selectWait  -- kept so the timer isn't garbage collected while it waits
 hs.hotkey.bind({ "alt", "cmd" }, "D", function()
   selectWait = hs.timer.waitUntil(function() local m = hs.eventtap.checkKeyboardModifiers(); return not (m.alt or m.cmd) end,
-    function() aiMouse(false, false, true) end, 0.02)
+    function() pointerAI(false, false, true) end, 0.02)
 end)
 -- Hold ⌥⌘S and speak your question; let go to send it
 local stopListening
 hs.hotkey.bind({ "alt", "cmd" }, "S",
-  function() stopListening = aiMouse(false, true) end,
+  function() stopListening = pointerAI(false, true) end,
   function() if stopListening then stopListening(); stopListening = nil end end)

@@ -1,9 +1,9 @@
 """Pointer AI for Windows and Linux: the same hotkeys, orb and cursor-following panel as hammerspoon.lua on macOS.
 
-    python aimouse.py            stays in the background: Win+Alt+A asks, Win+Alt+E just explains,
+    python pointer.py            stays in the background: Win+Alt+A asks, Win+Alt+E just explains,
                                  hold Win+Alt+S and speak to ask out loud (listen.py)
-    python aimouse.py --ask      one conversation, then quits (bind it to a desktop shortcut on Wayland)
-    python aimouse.py --explain  the same, skipping the question
+    python pointer.py --ask      one conversation, then quits (bind it to a desktop shortcut on Wayland)
+    python pointer.py --explain  the same, skipping the question
 
 Wayland doesn't let apps see the cursor or grab global hotkeys, so there the panel opens wherever the
 desktop puts it and stays there. Runs ask.py for each conversation, like Hammerspoon does.
@@ -205,7 +205,7 @@ def show_thread(thread, on_ask=None, on_close=None):
     return Panel(page, 340, 40, on_msg, on_close)
 
 
-def ai_mouse(explain, done=None, voice=False):
+def pointer_ai(explain, done=None, voice=False):
     """One conversation: same screenshot, follow-ups until Esc. ask.py streams each answer and ends it with END.
     With voice (an Event), the first question is spoken instead: listen.py records until the Event is set."""
     global task
@@ -324,7 +324,7 @@ def on_key(k, down):
     speak = getattr(k, "char", None) == "s" or getattr(k, "vk", None) == (0x53 if WIN else 0x73)  # S, by name or key code
     if down and speak and {keyboard.Key.cmd, keyboard.Key.alt} <= held and not listening:  # not key repeat
         listening = threading.Event()
-        threading.Thread(target=ai_mouse, args=(False, None, listening)).start()
+        threading.Thread(target=pointer_ai, args=(False, None, listening)).start()
     elif not down and (speak or k in (keyboard.Key.cmd, keyboard.Key.alt)) and listening:
         listening.set()
         listening = None
@@ -377,9 +377,9 @@ def main():
             mouse_listener.start()
             threading.Thread(target=follow, daemon=True).start()
         if once:
-            ai_mouse("--explain" in sys.argv, done=orb.destroy)
+            pointer_ai("--explain" in sys.argv, done=orb.destroy)
         else:
-            keyboard.GlobalHotKeys({k: (lambda e=e: threading.Thread(target=ai_mouse, args=(e,)).start())
+            keyboard.GlobalHotKeys({k: (lambda e=e: threading.Thread(target=pointer_ai, args=(e,)).start())
                                     for k, e in HOTKEYS.items()}).start()
     webview.start(started)
 

@@ -10,8 +10,8 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden 
 ::-webkit-scrollbar { width: 6px } ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px }
 ::placeholder { color: var(--dim) }
 </style><script>
-// Messages to the host: Hammerspoon on macOS, aimouse.py (pywebview) on Windows and Linux
-const post = m => window.webkit?.messageHandlers?.aimouse ? webkit.messageHandlers.aimouse.postMessage(m)
+// Messages to the host: Hammerspoon on macOS, pointer.py (pywebview) on Windows and Linux
+const post = m => window.webkit?.messageHandlers?.pointerai ? webkit.messageHandlers.pointerai.postMessage(m)
   : window.pywebview?.api ? pywebview.api.post(m)
   : addEventListener("pywebviewready", () => pywebview.api.post(m), { once: true })
 addEventListener("keydown", e => { if (e.key === "Escape") post({ close: true }) })  // macOS catches Esc first
